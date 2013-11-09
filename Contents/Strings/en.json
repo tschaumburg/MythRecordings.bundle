@@ -1,0 +1,59 @@
+{
+	"DEVICE_OFFLINE_TITLE"        : "Unable to connect!", 
+	"DEVICE_OFFLINE_MSG"          : "Your EyeTV seems to be offline!?",
+
+	"FEATURE_UNAVAIL_TITLE"       : "Feature not available!",
+	"FEATURE_UNAVAIL_MSG"         : "This feature is not available for the configured device type.",
+
+	"PREFS_CHANGED_TITLE"         : "Some of your settings where adjusted!",
+
+	"PREFS_CHANGED_EPG"           : "EPG has been disabled (token invalid or device type: browser).",
+	"PREFS_TOKEN_INVALID"         : "Your token is invalid (to short / invalid characters).",
+	"PREFS_CHANGED_HOST"          : "127.0.0.1 / localhost was changed to %s.",
+
+	"MAIN_MENU_CHANNELS"          : "Live-TV",
+	"MAIN_MENU_EPG"               : "EPG",
+	"MAIN_MENU_SCHEDULES"         : "Manage scheduled recordings",
+	"MAIN_MENU_PREFS"             : "Preferences",
+
+	"PREFS_TOKEN_WIZARD"          : "Token Wizard",
+	"PREFS_SETTINGS"              : "Settings",
+
+	"PREFS_TOKEN_WIZ_STEP1"       : "Open the Preferences on your %s.",
+	"PREFS_TOKEN_WIZ_STEP2"       : "Choose \"WLAN\".",
+	"PREFS_TOKEN_WIZ_STEP3"       : "Open the details of your active connection.",
+	"PREFS_TOKEN_WIZ_STEP4"       : "Enable \"Manual\" HTTP-Proxy.",
+	"PREFS_TOKEN_WIZ_STEP5"       : "Enter %s for Server and 2171 for Port. (If that doesnt work try %s)",
+	"PREFS_TOKEN_WIZ_STEP6"       : "Go back to the overview.",
+	"PREFS_TOKEN_WIZ_STEP7"       : "Close preferences.",
+	"PREFS_TOKEN_WIZ_STEP8"       : "Press \"Next\" on this Wizard,\nthen on your %s open EyeTV and try browsing the EPG.\n!!! You have only about 20sec, so be ready !!!",
+	"PREFS_TOKEN_WIZ_STEP9_0"     : "Sorry, an error occured.\nMaybe try again.\n(error: %s)",
+	"PREFS_TOKEN_WIZ_STEP9_1"     : "Your token was saved:\n%s\n",
+	"PREFS_TOKEN_WIZ_STEP9_2"     : "Please disable the \"Manual\" proxy in your Preferences.app!",
+	"PREFS_TOKEN_WIZ_NEXT"        : "Next",
+	"PREFS_TOKEN_WIZ_DONE"        : "Done",
+
+	"ERROR_TITLE"                 : "Error",
+
+	"CHANNELS_TITLE"              : "Channel List",
+	"CHANNELS_ALL_CHANNELS"       : "All Channels",
+
+	"CHANNEL_WATCH_NOW"           : "Watch \"%s\"",
+	"CHANNEL_DETAILS"             : "Show Details",
+	"CHANNEL_EPG"                 : "Channel EPG",
+
+	"SCHEDULES_LIST_EMPTY"        : "No recordings scheduled",
+	"SHOW_RECORD_SET"             : "Schedule recording",
+	"SHOW_RECORD_DEL"             : "Don't record",
+	
+	"SHOW_RECORD_SCHEDULED_TITLE" : "Schedule recording",
+	"SHOW_RECORD_SCHEDULED_MSG"   : "Show will be recorded.",
+
+	"SHOW_RECORD_FAILED_TITLE"    : "Recording Error",
+	"SHOW_RECORD_FAILED_MSG"      : "Scheduling failed!",
+	
+	"EPG_NOT_AVAILABLE"           : "no EPG data available",
+	"EPG_NOW"                     : "Airing now",
+	"EPG_NEXT"                    : "Up next",
+	"EPG_LIST_TITLE"              : "EPG"
+}

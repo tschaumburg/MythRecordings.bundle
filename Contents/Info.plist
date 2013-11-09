@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Comuter//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyLists-1.0.dtd">
+<plist version="1.0">
+	<dict>
+	<key>CFBundleIdentifier</key>
+	<string>dk.schaumburg-it.plexapp.mythrecordings</string>
+	<key>PlexClientPlatforms</key>
+	<string>Android,iOS,Roku,Safari,Firefox,Chrome</string>
+	<key>PlexFrameworkVersion</key>
+	<string>2</string>
+	<key>PlexPluginCodePolicy</key>
+	<string>Elevated</string>
+	</dict>
+</plist>

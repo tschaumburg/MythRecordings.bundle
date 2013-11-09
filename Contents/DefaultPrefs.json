@@ -1,0 +1,20 @@
+[
+    {
+        "id": "server",
+        "type": "text",
+        "label": "Server Name",
+        "default": "192.168.2.10" 
+    },
+    {
+        "id": "port",
+        "type": "text",
+        "label": "Port",
+        "default": "6544" 
+    },
+    {
+        "id": "whatsnewdays",
+        "type": "text",
+        "label": "Whats New Days",
+        "default": "10"
+    }
+]
