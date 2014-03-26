@@ -8,6 +8,8 @@
 	<string>Android,iOS,Roku,Safari,Firefox,Chrome</string>
 	<key>PlexFrameworkVersion</key>
 	<string>2</string>
+	<key>PlexPluginClass</key>
+	<string>Content</string>
 	<key>PlexPluginCodePolicy</key>
 	<string>Elevated</string>
 	</dict>
