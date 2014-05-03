@@ -74,6 +74,8 @@ def GetRecordingList(filterKeyName, filterKeyValue, sortKeyName = None, sortReve
 		recordings.sort(key=lambda rec: rec.find(sortKeyName).text, reverse=sortReverse)
 	
 	for recording in recordings:
+		if recording.find('Recording/RecGroup').text == 'Deleted':
+			continue
 		title = recording.find('Title').text
 		if (not title == "Unknown"):
 			if (filterKeyName is None):
@@ -187,7 +189,7 @@ def Recording(recording):
 	# Screenshot:
 	# ===========
 	if not channel is None and not recordingStart is None:
-		thumb = PVR_URL + 'Content/GetPreviewImage?ChanId=%s&StartTime=%s' % (channel, recordingStart,)
+		thumb = PVR_URL + '/Content/GetPreviewImage?ChanId=%s&StartTime=%s' % (channel, recordingStart,)
 	else:
 		thumb = R(ART)
 
