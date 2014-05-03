@@ -139,19 +139,29 @@ def Recording(recording):
 		epname = recording.find('SubTitle').text
 	except:
 		Warning('Recording: Recording: "%s" had no SubTitle - using date' % showname)
-		epname = airdate.strftime('%Y-%m-%d')
+		epname = shouldStart.strftime('%Y-%m-%d')
 
+	# Still recording?
+	# ================
+
+	utcnow = datetime.datetime.utcnow()
+	timeSinceEnd = utcnow - didEnd
+	stillRecording = timeSinceEnd < datetime.timedelta(hours=0, minutes=0,seconds=30)
 
 	# Duration:
 	# =========
+
 	try:
-		airdate = shouldStart
-		delta = didEnd - didStart
-		duration = str(int(delta.seconds * 1000))
+		if stillRecording:
+			delta = didEnd - didStart
+		else:
+			delta = shouldEnd - didStart + datetime.timedelta(hours=0, minutes=5,seconds=0)
 
 	except:
 		Warning('Recording: Recording: "%s", Duration error, Unexpected error' % showname)
 		delta = datetime.timedelta(hours=3, minutes=0,seconds=0)
+
+	duration = str(int(delta.seconds * 1000))
 	
 	# Check for missing start or end:
 	# ===============================
@@ -163,15 +173,20 @@ def Recording(recording):
 		missedStart = missedAtStart > datetime.timedelta(hours=0, minutes=0,seconds=0)
 		missedEnd = missedAtEnd > datetime.timedelta(hours=0, minutes=0,seconds=0)
 
+		if stillRecording:
+			missedEnd = False
+
 		if (missedStart and missedEnd):
 			warning = 'WARNING: Recording may have missed both start and end of program (by %s and %s, respectively)\n' % (str(missedAtStart),str(missedAtEnd))
 		elif (missedStart):
 			warning = 'WARNING: Recording may have missed start of program by %s\n' % str(missedAtStart)
-
-		elif (missedStart and missedEnd):
+		elif (missedEnd):
 			warning = 'WARNING: Recording may have missed end of program by %s\n' % str(missedAtEnd)
 		else:
 			warning = ""
+
+		if stillRecording:
+			warning = 'STILL RECORDING\n' + warning
 
 	except:
 
@@ -202,6 +217,8 @@ def Recording(recording):
 	header = '%s - %s' % (showname,epname)
 	if epname is None:
 		header = showname
+	if stillRecording:
+		header = header + " (STILL RECORDING)"
 
 	# Screenshot:
 	# ===========
@@ -214,11 +231,11 @@ def Recording(recording):
 	return VideoClipObject(
                 title = header,
                 summary = str(warning) + str(descr),
-                originally_available_at = airdate,
+                originally_available_at = shouldStart,
                 thumb = thumb,
 		duration = int(duration),
 		key = Callback(RecordingInfo, chanId=chanId, startTime=recordingStart),
-		rating_key= str(int(airdate.strftime('%Y%m%d%H%M'))),
+		rating_key= str(int(shouldStart.strftime('%Y%m%d%H%M'))),
 		items = [
 			MediaObject(
 				parts = [
