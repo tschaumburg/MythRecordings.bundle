@@ -28,6 +28,7 @@ def MainMenu():
     dir=ObjectContainer()
     dir.add(DirectoryObject(key=Callback(GroupRecordingsBy, keyName='Title'), title='Recordings by title'))
     dir.add(DirectoryObject(key=Callback(GroupRecordingsBy, keyName='Category'), title='Recordings by category'))
+    dir.add(DirectoryObject(key=Callback(GroupRecordingsBy, keyName='Recording/RecGroup'), title='Recordings by recording group'))
     dir.add(DirectoryObject(key=Callback(GroupRecordingsBy, keyName='Channel/ChannelName'), title='Recordings by channel'))
     dir.add(DirectoryObject(key=Callback(GetRecordingList, filterKeyName=None, filterKeyValue=None, sortKeyName='StartTime'), title='Recordings by recording date'))
     dir.add(PrefsObject(title="Preferences", summary="Configure how to connect to the MythTV backend", thumb=R("icon-prefs.png")))
