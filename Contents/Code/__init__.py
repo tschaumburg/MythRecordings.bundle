@@ -105,10 +105,26 @@ def Recording(recording):
 	shouldEnd = datetime.datetime.strptime(programEnd,"%Y-%m-%dT%H:%M:%SZ")
 	didEnd = datetime.datetime.strptime(recordingEnd,"%Y-%m-%dT%H:%M:%SZ")
 
+	fileName = recording.find('FileName').text
+	storageGroup = recording.find('Recording/StorageGroup').text
 
 	# Playback URL:
 	# =============
-	testURL = PVR_URL + 'Content/GetRecording?ChanId=%s&StartTime=%s' % (chanId,recordingStart,)
+	# MythTV setting 'Master Backend Override'definition: If enabled, the master backend will stream and 
+	# delete files if it finds them in the video directory. Useful if you are using a central storage 
+	# NFS share, and your slave backend isn’t running.
+	#
+	# Note from user sammyjayuk on the Plex forums: GetRecording doesn't respect this setting (it sends
+	# an HTTP redirect sending you to the recording backend). GetFile works as expected.
+	#
+	# For experimental purposes, we'll use GetFile, but only if the user sets this in the settings.
+	respectMasterBackendOverride = Prefs['respectMasterBackendOverride']
+	
+	if respectMasterBackendOverride:
+		testURL = PVR_URL + 'Content/GetFile?StorageGroup=%s&FileName=%s' % (storageGroup,fileName,)
+	else:
+		testURL = PVR_URL + 'Content/GetRecording?ChanId=%s&StartTime=%s' % (chanId,recordingStart,)
+	
 	Log('Recording: Name "%s" => URL="%s"' % (showname, testURL))
 
 
