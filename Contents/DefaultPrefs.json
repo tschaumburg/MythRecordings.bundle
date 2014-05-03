@@ -12,9 +12,9 @@
         "default": "6544" 
     },
     {
-        "id": "whatsnewdays",
-        "type": "text",
-        "label": "Whats New Days",
-        "default": "10"
+        "id": "respectMasterBackendOverride",
+        "label": "Respect MythTVs Master Backend Override setting",
+        "type": "bool",
+        "default": "false",
     }
 ]
