@@ -50,6 +50,8 @@ def GroupRecordingsBy(keyName):
 	recordings = root.findall('Programs/Program')
 	alreadyAdded = []
 	for recording in recordings:
+		if recording.find('Recording/RecGroup').text == 'Deleted':
+			continue
 		keyValue = recording.find(keyName).text
 		if keyValue not in alreadyAdded:
 			alreadyAdded.append(keyValue)
