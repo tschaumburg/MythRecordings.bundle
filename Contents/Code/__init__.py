@@ -52,6 +52,8 @@ def GroupRecordingsBy(keyName):
 	for recording in recordings:
 		if recording.find('Recording/RecGroup').text == 'Deleted':
 			continue
+		if recording.find('Recording/RecGroup').text == 'LiveTV':
+			continue
 		keyValue = recording.find(keyName).text
 		if keyValue not in alreadyAdded:
 			alreadyAdded.append(keyValue)
@@ -78,6 +80,8 @@ def GetRecordingList(filterKeyName, filterKeyValue, sortKeyName = None, sortReve
 	
 	for recording in recordings:
 		if recording.find('Recording/RecGroup').text == 'Deleted':
+			continue
+		if recording.find('Recording/RecGroup').text == 'LiveTV':
 			continue
 		title = recording.find('Title').text
 		if (not title == "Unknown"):
