@@ -33,13 +33,13 @@ def MainMenu():
     showByChannelName = Prefs['showByChannelName']
     
     dir=ObjectContainer()
-    dir.add(DirectoryObject(key=Callback(GroupRecordingsBy, keyName='Title'), title='By title', thumb=R(BY_NAME)))
-    dir.add(DirectoryObject(key=Callback(GroupRecordingsBy, keyName='Category', aliasPrefName = 'categoryAliases', iconPrefix = 'CategoryIcon_', backgroundPrefix = 'CategoryBackground_'), title='By category', thumb=R(BY_CATEGORY)))
+    dir.add(DirectoryObject(key=Callback(GroupRecordingsBy, filterKeyNames=[], filterKeyValues=[], groupKeyNames=['Title']), title='By title', thumb=R(BY_NAME)))
+    dir.add(DirectoryObject(key=Callback(GroupRecordingsBy, filterKeyNames=[], filterKeyValues=[], groupKeyNames=['Category', 'Title'], aliasPrefName = 'categoryAliases', iconPrefix = 'CategoryIcon_', backgroundPrefix = 'CategoryBackground_'), title='By category', thumb=R(BY_CATEGORY)))
     if showByRecordingGroup:
-        dir.add(DirectoryObject(key=Callback(GroupRecordingsBy, keyName='Recording/RecGroup'), title='By recording group'))
+        dir.add(DirectoryObject(key=Callback(GroupRecordingsBy, filterKeyNames=[], filterKeyValues=[], groupKeyNames=['Recording/RecGroup']), title='By recording group'))
     if showByChannelName:
-        dir.add(DirectoryObject(key=Callback(GroupRecordingsBy, keyName='Channel/ChannelName'), title='By channel'))
-    dir.add(DirectoryObject(key=Callback(GetRecordingList, filterKeyName=None, filterKeyValue=None, sortKeyName='StartTime'), title='By recording date', thumb=R(BY_DATE)))
+        dir.add(DirectoryObject(key=Callback(GroupRecordingsBy, filterKeyNames=[], filterKeyValues=[], groupKeyNames=['Channel/ChannelName']), title='By channel'))
+    dir.add(DirectoryObject(key=Callback(GetRecordingList, filterKeyNames=[], filterKeyValues=[], sortKeyName='StartTime'), title='By recording date', thumb=R(BY_DATE)))
     dir.add(PrefsObject(title="Preferences", summary="Configure how to connect to the MythTV backend", thumb=R("icon-prefs.png")))
     return dir
 
@@ -59,15 +59,44 @@ def MainMenu():
 # loaded from MythRecordings.bundle/Contents/Resources/${iconPrefix}${key}.png and 
 # MythRecordings.bundle/Contents/Resources/${backgroundPrefix}${key}.png respectively. 
 ####################################################################################################
-@route('/video/mythrecordings/GroupRecordingsBy', allow_sync=True) 
-def GroupRecordingsBy(keyName, aliasPrefName = '', iconPrefix = '', backgroundPrefix = ''):
+@route('/video/mythrecordings/GroupRecordingsBy', filterKeyNames = list, filterKeyValues = list, groupKeyNames = list, allow_sync=True) 
+def GroupRecordingsBy(groupKeyNames, filterKeyNames = [], filterKeyValues = [], aliasPrefName = None, iconPrefix = '', backgroundPrefix = '', backgroundName = ''):
+	if groupKeyNames is None:
+		groupKeyNames = []
+
+	if filterKeyNames is None:
+		filterKeyNames = []
+
+	if filterKeyValues is None:
+		filterKeyValues = []
+
+	if len(filterKeyValues) != len(filterKeyNames):
+		raise(Exception('Code error: filter key name and value lists should be of equal length'))
+
+	if len(groupKeyNames)==0:
+		return GetRecordingList(filterKeyNames=filterKeyNames, filterKeyValues=filterKeyValues, aliasPrefName=aliasPrefName, sortKeyName='StartTime', backgroundName = backgroundName)
+
+	keyName = groupKeyNames[0]
+	del groupKeyNames[0]
+	
+	if len(filterKeyNames) == 0:
+		title = 'By %s' % keyName
+	else:
+		title = ""
+		for n in range(0, len(filterKeyNames)):
+			keyN = filterKeyNames[n]
+			valueN = filterKeyValues[n]
+			title = title + ', %s "%s"' % (keyN, valueN)
+		title = title + ', by %s' % keyName
+		title = title[2:] # remove starting ", "
+
+	oc = ObjectContainer(title2=title) # title1 is not displayed (on most clients, anyway)
+	
 	# Load aliases from preferences:
 	keyAliases = LoadAliases(aliasPrefName)
 
-	oc = ObjectContainer(title2='By %s' % keyName)
-
 	url = PVR_URL + 'Dvr/GetRecordedList'
-	Log('GroupRecordingsBy(keyName="%s"): Loading URL %s' % (keyName,url))
+	Log('GroupRecordingsBy(keyName="%s", filterKeyNames="%s", filterKeyValues="%s"): Loading URL %s' % (keyName,filterKeyNames,filterKeyValues,url))
 	request = urllib2.Request(url, headers={"Accept" : "application/xml"})
 	u = urllib2.urlopen(request)
 	tree = ET.parse(u)
@@ -81,37 +110,70 @@ def GroupRecordingsBy(keyName, aliasPrefName = '', iconPrefix = '', backgroundPr
 			continue
 		if recording.find('Recording/RecGroup').text == 'LiveTV':
 			continue
-		keyValue = recording.find(keyName).text
-		keyValue = MapAliases(keyValue, keyAliases)
+		if not Match(filterKeyNames, filterKeyValues, recording, keyAliases):
+			continue
+
+		orgKeyValue = recording.find(keyName).text
+		keyValue = MapAliases(orgKeyValue, keyAliases)
+
 		if keyValue not in alreadyAdded:
+			Log('GroupRecordings: orgKeyValue = %s, keyValue = %s' % (orgKeyValue, keyValue))
+			subFilterKeyNames = list(filterKeyNames)
+			subFilterKeyNames.append(keyName)
+			subFilterKeyValues = list(filterKeyValues)
+			subFilterKeyValues.append(keyValue)
+
 			alreadyAdded.append(keyValue)
 			iconName = '%s%s.png' % (iconPrefix, keyValue)
 			Log('iconName = %s' % iconName)
 			backgroundName = '%s%s.png' % (backgroundPrefix, keyValue)
 			Log('backgroundName = %s' % backgroundName)
-			oc.add(DirectoryObject(key=Callback(GetRecordingList, filterKeyName=keyName, filterKeyValue=keyValue, aliasPrefName=aliasPrefName, sortKeyName='StartTime', backgroundName = backgroundName), title=keyValue, thumb=R(iconName), art=R(backgroundName)))
+
+			oc.add(DirectoryObject(key=Callback(GroupRecordingsBy, filterKeyNames=subFilterKeyNames, filterKeyValues=subFilterKeyValues, groupKeyNames=groupKeyNames, aliasPrefName=aliasPrefName, iconPrefix=iconPrefix, backgroundPrefix=backgroundPrefix, backgroundName=backgroundName), title=keyValue, thumb=R(iconName), art=R(backgroundName)))
 		
 	oc.objects.sort(key=lambda obj: obj.title)
 	return oc
+
+def Match(filterKeyNames, filterKeyValues, recording, keyAliases):
+	for n in range(0, len(filterKeyNames)):
+		filterKeyName = filterKeyNames[n]
+		filterKeyValue = filterKeyValues[n]
+		actualFilterKeyValue = recording.find(filterKeyName).text
+		Log("filterKeyValue=%s, actualFilterKeyValue=%s"%(filterKeyValue, actualFilterKeyValue))
+		actualFilterKeyValue = MapAliases(actualFilterKeyValue, keyAliases)
+		Log("filterKeyValue=%s, actualFilterKeyValue=%s"%(filterKeyValue, actualFilterKeyValue))
+		if not actualFilterKeyValue == filterKeyValue:
+			Log("Match (filterKeyName=%s, filterKeyValue=%s, actualFilterKeyValue=%s) = False" % (filterKeyName, filterKeyValue, actualFilterKeyValue))
+			return False
+	Log("Match(filterKeyNames=%s, filterKeyValues=%s) = True" % (filterKeyNames, filterKeyValues))
+	return True
 
 ####################################################################################################
 # GetRecordingList:
 # =================
 # Creates a directory (ObjectContainer) listing all the recordings where the contents of the element
-# identified by the filterKeyName parameter (an XPATH expresion) matches filterKeyValue. The values
-# are subject to the same aliasing mechanism described for GroupRecordingsBy above.
+# identified by the filterKeyNames parameter (a lis of XPATH expressions) matches filterKeyValues. The
+# values are subject to the same aliasing mechanism described for GroupRecordingsBy above.
 # 
 # The resulting list of recordings is sorted by the element identified by the sortKeyName parameter
 # (another XPATH expression)
 ####################################################################################################
-@route('/video/mythrecordings/GetRecordingList', allow_sync=True)
-def GetRecordingList(filterKeyName, filterKeyValue, sortKeyName = None, aliasPrefName = '', sortReverse = True, backgroundName = ''):
+@route('/video/mythrecordings/GetRecordingList', filterKeyNames=list, filterKeyValues=list, allow_sync=True)
+def GetRecordingList(filterKeyNames, filterKeyValues, sortKeyName = None, aliasPrefName = '', sortReverse = True, backgroundName = ''):
+	url = PVR_URL + 'Dvr/GetRecordedList'
+	Log('GetRecordingList(filterKeyNames="%s", filterKeyValues="%s", sortKeyName="%s, aliasPrefName = %s"): Loading URL %s' % (filterKeyNames, filterKeyValues, sortKeyName, aliasPrefName, url))
+
 	keyAliases = LoadAliases(aliasPrefName)
 
-	oc = ObjectContainer(title2=filterKeyValue, art=R(backgroundName))
+	title2= "By title"
+	if not filterKeyValues is None:
+		title2 = " - ".join(filterKeyValues)
 
-	url = PVR_URL + 'Dvr/GetRecordedList'
-	Log('GetRecordingList(filterKeyName="%s", filterKeyValue="%s", sortKeyName="%s, aliasPrefName = %s"): Loading URL %s' % (filterKeyName, filterKeyValue, sortKeyName, aliasPrefName, url))
+	oc = ObjectContainer(title2 = title2)
+
+	if not backgroundName == '':
+		oc.art = R(backgroundName)
+
 	request = urllib2.Request(url, headers={"Accept" : "application/xml"})
 	u = urllib2.urlopen(request)
 	tree = ET.parse(u)
@@ -126,15 +188,12 @@ def GetRecordingList(filterKeyName, filterKeyValue, sortKeyName = None, aliasPre
 			continue
 		if recording.find('Recording/RecGroup').text == 'LiveTV':
 			continue
-		title = recording.find('Title').text
-		if (not title == "Unknown"):
-			if (filterKeyName is None):
-				oc.add(Recording(recording, backgroundName))
-			else:
-				actualKeyValue = recording.find(filterKeyName).text
-				actualKeyValue = MapAliases(actualKeyValue, keyAliases)
-				if actualKeyValue == filterKeyValue:
-					oc.add(Recording(recording, backgroundName))
+		if recording.find('Title').text == 'Unknown':
+			continue
+		if not Match(filterKeyNames, filterKeyValues, recording, keyAliases):
+			continue
+		oc.add(Recording(recording, backgroundName))
+			
 	return oc
 
 
@@ -153,6 +212,8 @@ def GetRecordingList(filterKeyName, filterKeyValue, sortKeyName = None, aliasPre
 ####################################################################################################
 def LoadAliases(aliasPrefName):
 	if aliasPrefName is None:
+		return []
+	if aliasPrefName == "":
 		return []
 	keyAliasString = Prefs[aliasPrefName]
 	try:
@@ -248,6 +309,7 @@ def Recording(recording, backgroundName = ''):
 
 	try:
 		epname = recording.find('SubTitle').text
+		epname = "%s (%s)" % (epname, shouldStart.strftime('%Y-%m-%d %H:%M'))
 	except:
 		Warning('Recording: Recording: "%s" had no SubTitle - using date' % showname)
 		epname = shouldStart.strftime('%Y-%m-%d')
@@ -317,7 +379,6 @@ def Recording(recording, backgroundName = ''):
 	try:
 		channel = recording.find('Channel').find('ChanId').text
 		if channel == '0':
-
 			channel = None
 	except:
 		Warning('Recording: Recording: "%s", Could not set channel ID' % showname)			
