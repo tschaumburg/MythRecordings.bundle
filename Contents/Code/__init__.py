@@ -27,41 +27,99 @@ def Start():
 	ValidatePrefs()
 
 ####################################################################################################
-# This main function will setup the displayed items.
+# MainMenu:
+# =========
+# Sets up the top-level menu.
+#
+# Returns:
+#    ObjectContainer
+####################################################################################################
 @handler('/video/mythrecordings','MythTV recordings')
 def MainMenu():
-    showByRecordingGroup = Prefs['showByRecordingGroup']
-    showByChannelName = Prefs['showByChannelName']
-    
     dir=ObjectContainer()
-    dir.add(DirectoryObject(key=Callback(GroupRecordingsBy, filterKeyNames=[], filterKeyValues=[], groupKeyNames=['Title']), title='By title', thumb=R(BY_NAME)))
-    dir.add(DirectoryObject(key=Callback(GroupRecordingsBy, filterKeyNames=[], filterKeyValues=[], groupKeyNames=['Category', 'Title'], iconPrefix = 'CategoryIcon_', backgroundPrefix = 'CategoryBackground_'), title='By category', thumb=R(BY_CATEGORY)))
+
+    # By title:
+    dir.add(
+        DirectoryObject(
+            key=Callback(GroupRecordingsBy, filterKeyNames=[], filterKeyValues=[], groupKeyNames=['Title']), 
+            title='By title', 
+            thumb=R(BY_NAME)
+        )
+    )
+    
+    # By category, then by title:
+    dir.add(
+        DirectoryObject(
+            key=Callback(GroupRecordingsBy, filterKeyNames=[], filterKeyValues=[], groupKeyNames=['Category', 'Title']), 
+            title='By category', 
+            thumb=R(BY_CATEGORY)
+        )
+    )
+
+    # By recording group:
+    showByRecordingGroup = Prefs['showByRecordingGroup']
     if showByRecordingGroup:
-        dir.add(DirectoryObject(key=Callback(GroupRecordingsBy, filterKeyNames=[], filterKeyValues=[], groupKeyNames=['Recording/RecGroup']), title='By recording group'))
+        dir.add(
+            DirectoryObject(
+                key=Callback(GroupRecordingsBy, filterKeyNames=[], filterKeyValues=[], groupKeyNames=['Recording/RecGroup'], groupKeyReadableNames=['Recording group']), 
+                title='By recording group'
+            )
+        )
+
+    # By channel name:
+    showByChannelName = Prefs['showByChannelName']
     if showByChannelName:
-        dir.add(DirectoryObject(key=Callback(GroupRecordingsBy, filterKeyNames=[], filterKeyValues=[], groupKeyNames=['Channel/ChannelName']), title='By channel'))
-    dir.add(DirectoryObject(key=Callback(GetRecordingList, filterKeyNames=[], filterKeyValues=[], sortKeyName='StartTime'), title='By recording date', thumb=R(BY_DATE)))
-    dir.add(PrefsObject(title="Preferences", summary="Configure how to connect to the MythTV backend", thumb=R("icon-prefs.png")))
+        dir.add(
+            DirectoryObject(
+                key=Callback(GroupRecordingsBy, filterKeyNames=[], filterKeyValues=[], groupKeyNames=['Channel/ChannelName'], groupKeyReadableNames=['Channel name']), 
+                title='By channel'
+            )
+        )
+
+    # By recording date:
+    dir.add(
+        DirectoryObject(
+            key=Callback(GetRecordingList, filterKeyNames=[], filterKeyValues=[], sortKeyName='StartTime'), 
+            title='By recording date', 
+            thumb=R(BY_DATE)
+        )
+    )
+
+    # Preferences:
+    dir.add(
+        PrefsObject(
+            title="Preferences", 
+            summary="Configure how to connect to the MythTV backend", 
+            thumb=R("icon-prefs.png")
+        )
+    )
+
     return dir
 
 
 ####################################################################################################
 # GroupRecordingsBy:
 # ==================
-# Create a directory (ObjectContainer) listing the recordings grouped by key (the value of the 
-# element identified by the XPATH expression in the keyName parameter).
+# Returns a tree-structure of all the recordings matching the specified filter.
 #
-# The key thus found is passed through an aliasing mechanism, intended to conflate almost-identical
-# values (like "Series" and "Serie" or "Tonight Show" and "The Tonight Show"). See the LoadAliases
-# function for details.
+# The recordings will be sorted into sub-directories according to the value of
+# the group-by key. The group-by key is the first element of the groupKeyNames
+# list.
 #
-# If iconPrefix or backgroundPrefix is specified, each entry in the directory (ObjectContainer)
-# will have an icon (thumb) or background image (art) associated with it. These images will be
-# loaded from MythRecordings.bundle/Contents/Resources/${iconPrefix}${key}.png and 
-# MythRecordings.bundle/Contents/Resources/${backgroundPrefix}${key}.png respectively. 
+# Each sub-directory will have an icon (thumb) or background image (art) associated 
+# with it.
+#
+# These images will be loaded from 
+#    MythRecordings.bundle/Contents/Resources/${groupKey}Icon_%{groupValue}.png 
+# and 
+#    MythRecordings.bundle/Contents/Resources/${groupKey}Background_%{groupValue}.png 
+# respectively.
+#
+# Returns:
+#    ObjectContainer
 ####################################################################################################
-@route('/video/mythrecordings/GroupRecordingsBy', filterKeyNames = list, filterKeyValues = list, groupKeyNames = list, allow_sync=True) 
-def GroupRecordingsBy(groupKeyNames, filterKeyNames = [], filterKeyValues = [], iconPrefix = '', backgroundPrefix = '', backgroundName = ''):
+@route('/video/mythrecordings/GroupRecordingsBy', filterKeyNames = list, filterKeyValues = list, groupKeyNames = list, groupKeyReadableNames = list, allow_sync=True) 
+def GroupRecordingsBy(groupKeyNames, groupKeyReadableNames = [], filterKeyNames = [], filterKeyValues = [], backgroundName = ''):
 	if groupKeyNames is None:
 		groupKeyNames = []
 
@@ -79,20 +137,20 @@ def GroupRecordingsBy(groupKeyNames, filterKeyNames = [], filterKeyValues = [], 
 
 	keyName = groupKeyNames[0]
 	del groupKeyNames[0]
+
+	if (len(groupKeyReadableNames)>0):
+		keyReadableName = groupKeyReadableNames[0]
+		del groupKeyReadableNames[0]
+	else:
+		keyReadableName = keyName
+
+	iconPrefix = "%sIcon_" % CamelCase(keyReadableName)
+	backgroundPrefix = "%sBackground_" % CamelCase(keyReadableName)
 	
 	# Determine a good top-of-page title:
-	if len(filterKeyNames) == 0:
-		title = 'By %s' % keyName
-	else:
-		title = ""
-		for n in range(0, len(filterKeyNames)):
-			keyN = filterKeyNames[n]
-			valueN = filterKeyValues[n]
-			title = title + ', %s "%s"' % (keyN, valueN)
-		title = title + ', by %s' % keyName
-		title = title[2:] # remove starting ", "
+        title = MakeTitle(keyName, filterKeyNames, filterKeyValues)
 
-	oc = ObjectContainer(title2=title) # title1 is not displayed (on most clients, anyway)
+	oc = ObjectContainer(title2=title, art=R(backgroundName)) # title1 is not displayed (on most clients, anyway)
 	
 	# Get the recordings metadata from the MythTV backend:
 	recordings = GetMythTVRecordings(filterKeyNames, filterKeyValues)
@@ -114,54 +172,61 @@ def GroupRecordingsBy(groupKeyNames, filterKeyNames = [], filterKeyValues = [], 
 		subFilterKeyValues.append(subdirName)
 
 		iconName = '%s%s.png' % (iconPrefix, subdirName)
-		#Log('iconName = %s' % iconName)
+		Log('iconName = %s' % iconName)
 		backgroundName = '%s%s.png' % (backgroundPrefix, subdirName)
-		#Log('backgroundName = %s' % backgroundName)
+		Log('backgroundName = %s' % backgroundName)
 
 		subdirContents = entries[subdirName]
 		entryTitle = "%s (%s)" % (subdirName, len(subdirContents))
 		
 		if len(subdirContents) == 1:
+                        # Experimental:
+                        # =============
+                        # If the subdirectory we're about to create only contains a
+                        # single entry, we'll save the directory and just put the
+                        # recording in.
 			recording = subdirContents[0]
 			oc.add(Recording(recording, backgroundName))
 		else:
-			oc.add(DirectoryObject(key=Callback(GroupRecordingsBy, filterKeyNames=subFilterKeyNames, filterKeyValues=subFilterKeyValues, groupKeyNames=groupKeyNames, iconPrefix=iconPrefix, backgroundPrefix=backgroundPrefix, backgroundName=backgroundName), title=entryTitle, thumb=R(iconName), art=R(backgroundName)))
+                        # Otherwise, we'll play it straight and put in a DirectoryObject
+                        # referencing the next level down
+			oc.add(
+                            DirectoryObject(
+                                key=
+                                    Callback(
+                                        GroupRecordingsBy, 
+                                        filterKeyNames=subFilterKeyNames, 
+                                        filterKeyValues=subFilterKeyValues, 
+                                        groupKeyNames=groupKeyNames,
+                                        groupKeyReadableNames=groupKeyReadableNames,
+                                        backgroundName=backgroundName
+                                    ), 
+                                title=entryTitle, 
+                                thumb=R(iconName), 
+                                art=R(backgroundName)
+                            )
+                        )
 		
 	oc.objects.sort(key=lambda obj: obj.title)
 	return oc
 
-def Match(filterKeyNames, filterKeyValues, recording):
-	for n in range(0, len(filterKeyNames)):
-		filterKeyName = filterKeyNames[n]
-		filterKeyValue = filterKeyValues[n]
-		actualFilterKeyValue = GetField(recording, filterKeyName)
-		if not actualFilterKeyValue == filterKeyValue:
-			return False
-	return True
+def MakeTitle(groupBy, filterKeyNames, filterKeyValues):
+    if len(filterKeyNames) == 0:
+        title = 'By %s' % groupBy
+    else:
+        title = ""
+        for n in range(0, len(filterKeyNames)):
+            keyN = filterKeyNames[n]
+            valueN = filterKeyValues[n]
+            title = title + ', %s "%s"' % (keyN, valueN)
+        title = title + ', by %s' % groupBy
+        title = title[2:] # remove starting ", "
+    return title
 
-def GetMythTVRecordings(filterKeyNames, filterKeyValues):
-	url = PVR_URL + 'Dvr/GetRecordedList'
-	request = urllib2.Request(url, headers={"Accept" : "application/xml"})
-	u = urllib2.urlopen(request)
-	tree = ET.parse(u)
-	root = tree.getroot()
-	
-	# Loop through recordings, filtering as specified:
-	recordings = root.findall('Programs/Program')
-	result = []
-	for recording in recordings:
-		if recording.find('Recording/RecGroup').text == 'Deleted':
-			continue
-		if recording.find('Recording/RecGroup').text == 'LiveTV':
-			continue
-		if recording.find('Title').text == 'Unknown':
-			continue
-		if not Match(filterKeyNames, filterKeyValues, recording):
-			continue
+def CamelCase(src):
+    #return ''.join(x for x in src.title() if not x.isspace())
+    return src.title().replace(' ', '')
 
-		result.append(recording)
-
-	return result
 
 ####################################################################################################
 # GetRecordingList:
@@ -363,34 +428,87 @@ def Recording(recording, backgroundName = ''):
 		]
         )
 
-####################################################################################################
-# LoadAliases:
-# ============
-# Loads a list of aliases from the preferences string specified by the parameter aliasPrefName.
-#
-# The alias list if a JSON formatted list of list of strings. Each list-of-strings is interpreted
-# as a canonical name, followed by its synonyms.
-#
-# Example:
-#    The following JSON formatted alias string defines the canonical names 'Series' and 'Movies', 
-#    and two synonyms for each:
-#       [['Series', 'serie', 'series'], ['Movies', 'film', 'action']]
-####################################################################################################
-def LoadAliases(aliasPrefName):
-	if aliasPrefName is None:
-		return []
-	if aliasPrefName == "":
-		return []
-	keyAliasString = Prefs[aliasPrefName]
-	try:
-		#Log('keyAliasString = %s', keyAliasString)
-		keyAliases = json.loads(keyAliasString)
-		#Log('keyAliases = %s', keyAliases)
-	except:
-		keyAliases = [] # no aliases, then
 
-	return keyAliases
+####################################################################################################
+# RecordingInfo:
+# ==============
+# Returns an ObjectContainer with metadata about a recording, as required by the VideoClipObject.
+# The purpose is a bit mysterious, but it's required.
+#
+# Return:
+#    ObjectContainer
+####################################################################################################
+@route('/video/mythrecordings/GetRecordingInfo', allow_sync=True)
+def RecordingInfo(chanId, startTime, backgroundName):
+	url = PVR_URL + 'Dvr/GetRecorded?StartTime=%s&ChanId=%s' % (startTime, chanId)
+	request = urllib2.Request(url, headers={"Accept" : "application/xml"})
+	Log('RecordingInfo(chanId="%s", startTime="%s" backgroundName="%s"): opening %s' % (chanId, startTime, url))
+	u = urllib2.urlopen(request)
+	tree = ET.parse(u)
+	root = tree.getroot()
 
+	recording = root #.findall('Programs/Program')
+
+	recording_object = Recording(recording, backgroundName)
+	return ObjectContainer(objects=[recording_object], art=R(backgroundName))
+
+
+####################################################################################################
+# GetMythTVRecordings:
+# ====================
+# Gets a list of all recording structures matching the specified filters.
+#
+# Return:
+#    list of recording (the structure of a recording is irrelevant - use GetField to
+#                       retrieve the value of a field)
+####################################################################################################
+def GetMythTVRecordings(filterKeyNames, filterKeyValues):
+	url = PVR_URL + 'Dvr/GetRecordedList'
+	request = urllib2.Request(url, headers={"Accept" : "application/xml"})
+	u = urllib2.urlopen(request)
+	tree = ET.parse(u)
+	root = tree.getroot()
+	
+	# Loop through recordings, filtering as specified:
+	recordings = root.findall('Programs/Program')
+	result = []
+	for recording in recordings:
+		if recording.find('Recording/RecGroup').text == 'Deleted':
+			continue
+		if recording.find('Recording/RecGroup').text == 'LiveTV':
+			continue
+		if recording.find('Title').text == 'Unknown':
+			continue
+		if not Match(filterKeyNames, filterKeyValues, recording):
+			continue
+
+		result.append(recording)
+
+	return result
+
+def Match(filterKeyNames, filterKeyValues, recording):
+	for n in range(0, len(filterKeyNames)):
+		filterKeyName = filterKeyNames[n]
+		filterKeyValue = filterKeyValues[n]
+		actualFilterKeyValue = GetField(recording, filterKeyName)
+		if not actualFilterKeyValue == filterKeyValue:
+			return False
+	return True
+
+
+####################################################################################################
+# GetField:
+# =========
+# Gets the value of a field in the recording AFTER having performed alias substitution on it,
+#
+# The value thus found is passed through an aliasing mechanism, intended to conflate almost-identical
+# values (like "Series" and "Serie" or "Tonight Show" and "The Tonight Show"). See the LoadAliases
+# function for details.
+#
+# Return:
+#    string
+#
+####################################################################################################
 def GetField(recording, fieldName):
 	if fieldName == "Title" or fieldName == "SubTitle":
 		subtitle = recording.find('SubTitle').text
@@ -418,10 +536,14 @@ def GetField(recording, fieldName):
 
 	return recording.find(fieldName).text
 
+
 ####################################################################################################
 # MapAlias:
 # =========
 # Maps a string into its canonical version (if any), using an alias list loaded by LoadAliases.
+#
+# Return:
+#    string
 #
 # Example:
 #    Assume the JSON formatted alias string from the LoadAliases description:
@@ -452,19 +574,36 @@ def MapAliases(keyValue, keyAliases):
 
 
 ####################################################################################################
-@route('/video/mythrecordings/GetRecordingInfo', allow_sync=True)
-def RecordingInfo(chanId, startTime, backgroundName):
-	url = PVR_URL + 'Dvr/GetRecorded?StartTime=%s&ChanId=%s' % (startTime, chanId)
-	request = urllib2.Request(url, headers={"Accept" : "application/xml"})
-	Log('RecordingInfo(chanId="%s", startTime="%s" backgroundName="%s"): opening %s' % (chanId, startTime, backgroundName, url))
-	u = urllib2.urlopen(request)
-	tree = ET.parse(u)
-	root = tree.getroot()
+# LoadAliases:
+# ============
+# Loads a list of aliases from the preferences string specified by the parameter aliasPrefName.
+#
+# The alias list if a JSON formatted list of list of strings. Each list-of-strings is interpreted
+# as a canonical name, followed by its synonyms.
+#
+# Return:
+#    list of list of strings
+#
+# Example:
+#    The following JSON formatted alias string defines the canonical names 'Series' and 'Movies', 
+#    and two synonyms for each:
+#       [['Series', 'serie', 'series'], ['Movies', 'film', 'action']]
+####################################################################################################
+def LoadAliases(aliasPrefName):
+	if aliasPrefName is None:
+		return []
+	if aliasPrefName == "":
+		return []
+	keyAliasString = Prefs[aliasPrefName]
+	try:
+		#Log('keyAliasString = %s', keyAliasString)
+		keyAliases = json.loads(keyAliasString)
+		#Log('keyAliases = %s', keyAliases)
+	except:
+		keyAliases = [] # no aliases, then
 
-	recording = root #.findall('Programs/Program')
+	return keyAliases
 
-	recording_object = Recording(recording, backgroundName)
-	return ObjectContainer(objects=[recording_object], art=R(backgroundName))
 
 #####################################################################################################
 def ValidatePrefs():
