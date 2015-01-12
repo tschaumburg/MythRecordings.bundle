@@ -7,6 +7,7 @@ import xml.etree.ElementTree as ET
 import datetime
 import urllib2
 import json
+import re
 ####################################################################################################
 VIDEO_PREFIX = "/video/mythrecordings"
 
@@ -17,6 +18,46 @@ BY_DATE  = 'by-date.png'
 BY_CATEGORY  = 'by-category.png'
 PVR_URL = 'http://%s:%s/' % (Prefs['server'],Prefs['port'])
 TITLE_SPLITTERS = ['-', ':']
+CACHE_TIME = int(Prefs['cacheTime'])
+
+
+
+####################################################################################################
+# Developer configurable data:
+# ============================
+# This section contains configuration that you only need to change if you change the code.
+####################################################################################################
+
+# ReadableKeyNames:
+# =================
+# Key names are XPATH expressions that are used to retrieve values (title, recording start time,
+# etc.) from the XML metadata describing a recording.
+#
+# Sometimes, a screen needs to display the key used to organize data (such as a label saying
+# "sort by xxx".
+#
+# In these cases, we need a simple way of getting a human-readable form of a key (after all,
+# "sort by Recording/RecGroup" doesn't sound very approachable...)
+#
+# So: whenever you add a literal XPATH expression in a call to GroupRecordingsBy, you may
+# want to add a human-readableform to the dictionary below.
+
+ReadableKeyNames = \
+    {
+        "Recording/RecGroup": "Recording group",
+        "Channel/ChannelName": "Channel name",
+        "StartTime": "Start time"
+    }
+
+def GetReadableKeyName(keyname):
+    if keyname in ReadableKeyNames.keys():
+        return ReadableKeyNames[keyname]
+    else:
+        return keyname
+
+
+
+
 ####################################################################################################
 
 def Start():
@@ -41,7 +82,7 @@ def MainMenu():
     # By title:
     dir.add(
         DirectoryObject(
-            key=Callback(GroupRecordingsBy, filterKeyNames=[], filterKeyValues=[], groupKeyNames=['Title']), 
+            key=Callback(GroupRecordingsBy, groupBy=['Title']), 
             title='By title', 
             thumb=R(BY_NAME)
         )
@@ -50,7 +91,7 @@ def MainMenu():
     # By category, then by title:
     dir.add(
         DirectoryObject(
-            key=Callback(GroupRecordingsBy, filterKeyNames=[], filterKeyValues=[], groupKeyNames=['Category', 'Title']), 
+            key=Callback(GroupRecordingsBy, groupBy=['Category', 'Title']), 
             title='By category', 
             thumb=R(BY_CATEGORY)
         )
@@ -61,7 +102,7 @@ def MainMenu():
     if showByRecordingGroup:
         dir.add(
             DirectoryObject(
-                key=Callback(GroupRecordingsBy, filterKeyNames=[], filterKeyValues=[], groupKeyNames=['Recording/RecGroup'], groupKeyReadableNames=['Recording group']), 
+                key=Callback(GroupRecordingsBy, groupBy=['Recording/RecGroup']), 
                 title='By recording group'
             )
         )
@@ -71,7 +112,7 @@ def MainMenu():
     if showByChannelName:
         dir.add(
             DirectoryObject(
-                key=Callback(GroupRecordingsBy, filterKeyNames=[], filterKeyValues=[], groupKeyNames=['Channel/ChannelName'], groupKeyReadableNames=['Channel name']), 
+                key=Callback(GroupRecordingsBy, groupBy=['Channel/ChannelName']), 
                 title='By channel'
             )
         )
@@ -79,7 +120,7 @@ def MainMenu():
     # By recording date:
     dir.add(
         DirectoryObject(
-            key=Callback(GetRecordingList, filterKeyNames=[], filterKeyValues=[], sortKeyName='StartTime'), 
+            key=Callback(GetRecordingList, sortKeyName='StartTime'), 
             title='By recording date', 
             thumb=R(BY_DATE)
         )
@@ -103,7 +144,7 @@ def MainMenu():
 # Returns a tree-structure of all the recordings matching the specified filter.
 #
 # The recordings will be sorted into sub-directories according to the value of
-# the group-by key. The group-by key is the first element of the groupKeyNames
+# the group-by key. The group-by key is the first element of the groupBy
 # list.
 #
 # Each sub-directory will have an icon (thumb) or background image (art) associated 
@@ -118,42 +159,47 @@ def MainMenu():
 # Returns:
 #    ObjectContainer
 ####################################################################################################
-@route('/video/mythrecordings/GroupRecordingsBy', filterKeyNames = list, filterKeyValues = list, groupKeyNames = list, groupKeyReadableNames = list, allow_sync=True) 
-def GroupRecordingsBy(groupKeyNames, groupKeyReadableNames = [], filterKeyNames = [], filterKeyValues = [], backgroundName = ''):
-	if groupKeyNames is None:
-		groupKeyNames = []
+# Call: 
+#    filterBy={"Category":"series", "Title": "CSI: New York"}, backgroundName="TitleBackground_CsiNewYork.png", groupBy=[]
+# Returns:
+#    <MediaContainer
+#       title1="MythTV recordings" 
+#       title2="Category - Title" 
+#       size="98" 
+#       identifier="dk.schaumburg-it.plexapp.mythrecordings" 
+#       sourceTitle="MythTV recordings" 
+#       mediaTagPrefix="/system/bundle/media/flags/" 
+#       mediaTagVersion="1420832128" 
+#       prefsKey="/:/plugins/dk.schaumburg-it.plexapp.mythrecordings/prefs" 
+#       allowSync="1"
+#   >
+@route('/video/mythrecordings/GroupRecordingsBy', filterBy = dict, groupBy = list, allow_sync=True) 
+def GroupRecordingsBy(groupBy = [], filterBy = {}, backgroundUrl = None):
+	Log("GroupRecordingsBy(groupBy = %s, filterBy = %s, backgroundUrl = %s)" % (groupBy, filterBy, backgroundUrl))
+	if groupBy is None:
+		groupBy = []
 
-	if filterKeyNames is None:
-		filterKeyNames = []
+	if filterBy is None:
+		filterBy = {}
 
-	if filterKeyValues is None:
-		filterKeyValues = []
+	if len(groupBy)==0:
+		#Log("RECLIST, backgroundUrl = %s" % backgroundUrl)
+		return GetRecordingList(filterBy=filterBy, sortKeyName='StartTime', backgroundUrl = backgroundUrl)
 
-	if len(filterKeyValues) != len(filterKeyNames):
-		raise(Exception('Code error: filter key name and value lists should be of equal length'))
+	keyName = groupBy[0]
+	del groupBy[0]
 
-	if len(groupKeyNames)==0:
-		return GetRecordingList(filterKeyNames=filterKeyNames, filterKeyValues=filterKeyValues, sortKeyName='StartTime', backgroundName = backgroundName)
-
-	keyName = groupKeyNames[0]
-	del groupKeyNames[0]
-
-	if (len(groupKeyReadableNames)>0):
-		keyReadableName = groupKeyReadableNames[0]
-		del groupKeyReadableNames[0]
-	else:
-		keyReadableName = keyName
-
-	iconPrefix = "%sIcon_" % CamelCase(keyReadableName)
-	backgroundPrefix = "%sBackground_" % CamelCase(keyReadableName)
+	Log("GroupRecordingsBy(%s)" % keyName)
+	iconPrefix = "%sIcon_" % CamelCase(GetReadableKeyName(keyName))
+	backgroundPrefix = "%sBackground_" % CamelCase(GetReadableKeyName(keyName))
 	
 	# Determine a good top-of-page title:
-        title = MakeTitle(keyName, filterKeyNames, filterKeyValues)
+        title = MakeTitle(keyName, filterBy)
 
-	oc = ObjectContainer(title2=title, art=R(backgroundName)) # title1 is not displayed (on most clients, anyway)
+	oc = ObjectContainer(title2=title, art=backgroundUrl) # title1 is not displayed (on most clients, anyway)
 	
 	# Get the recordings metadata from the MythTV backend:
-	recordings = GetMythTVRecordings(filterKeyNames, filterKeyValues)
+	recordings = GetMythTVRecordings(filterBy)
 	
 	# Sort the recordings into a {string : list} dictionary
 	entries = {}
@@ -166,15 +212,14 @@ def GroupRecordingsBy(groupKeyNames, groupKeyReadableNames = [], filterKeyNames 
 
 	# Loop through each of the keys and create a subdirectory entry:
 	for subdirName in entries.keys():
-		subFilterKeyNames = list(filterKeyNames)
-		subFilterKeyNames.append(keyName)
-		subFilterKeyValues = list(filterKeyValues)
-		subFilterKeyValues.append(subdirName)
+                subdirFilterBy = filterBy.copy()
+                subdirFilterBy[keyName] = subdirName
 
-		iconName = '%s%s.png' % (iconPrefix, subdirName)
-		Log('iconName = %s' % iconName)
-		backgroundName = '%s%s.png' % (backgroundPrefix, subdirName)
-		Log('backgroundName = %s' % backgroundName)
+		iconName = '%s%s.png' % (iconPrefix, CamelCase(subdirName))
+		#Log('iconName = %s' % iconName)
+		iconUrl = R(iconName)
+		backgroundUrl = R('%s%s.png' % (backgroundPrefix, CamelCase(subdirName)))
+		#Log('backgroundUrl = %s' % backgroundUrl)
 
 		subdirContents = entries[subdirName]
 		entryTitle = "%s (%s)" % (subdirName, len(subdirContents))
@@ -186,46 +231,86 @@ def GroupRecordingsBy(groupKeyNames, groupKeyReadableNames = [], filterKeyNames 
                         # single entry, we'll save the directory and just put the
                         # recording in.
 			recording = subdirContents[0]
-			oc.add(Recording(recording, backgroundName))
+			oc.add(Recording(recording, backgroundUrl))
 		else:
                         # Otherwise, we'll play it straight and put in a DirectoryObject
                         # referencing the next level down
+
+			# Special case: see if this is the list of episodes in a series	
+			lastGroupedBy = keyName
+			if lastGroupedBy == "Title":
+				seriesName = subdirName
+				backgroundUrl = GetSeriesFanartFromName(subdirContents, seriesName)
+				iconUrl = backgroundUrl
+			if lastGroupedBy == "SeriesId":
+				seriesId = subdirName
+				backgroundUrl = GetSeriesFanartFromId(subdirContents, seriesId)
+				iconUrl = backgroundUrl
+	
+			Log("Calling GroupRecordingsBy(groupBy = %s, filterBy = %s, backgroundUrl = %s)" % (groupBy, subdirFilterBy, backgroundUrl))
 			oc.add(
                             DirectoryObject(
                                 key=
                                     Callback(
-                                        GroupRecordingsBy, 
-                                        filterKeyNames=subFilterKeyNames, 
-                                        filterKeyValues=subFilterKeyValues, 
-                                        groupKeyNames=groupKeyNames,
-                                        groupKeyReadableNames=groupKeyReadableNames,
-                                        backgroundName=backgroundName
+                                        GroupRecordingsBy,
+                                        filterBy=subdirFilterBy,
+                                        groupBy=groupBy,
+                                        backgroundUrl=backgroundUrl
                                     ), 
                                 title=entryTitle, 
-                                thumb=R(iconName), 
-                                art=R(backgroundName)
+                                thumb=iconUrl
                             )
                         )
 		
 	oc.objects.sort(key=lambda obj: obj.title)
 	return oc
 
-def MakeTitle(groupBy, filterKeyNames, filterKeyValues):
-    if len(filterKeyNames) == 0:
-        title = 'By %s' % groupBy
+def GetSeriesFanartFromName(recordings, seriesName):
+	return GetSeriesFanartFromFieldValue(recordings, "Title", seriesName)
+
+def GetSeriesFanartFromId(recordings, seriesId):
+	return GetSeriesFanartFromFieldValue(recordings, "SeriesId", seriesId)
+
+def GetSeriesFanartFromFieldValue(recordings, fieldName, fieldValue):
+	for recording in recordings:
+		val = GetField(recording, fieldName)
+		if val == fieldValue:
+			artworkInfoList = recording.find("Artwork/ArtworkInfos")
+			if not artworkInfoList is None:
+				break
+
+	if artworkInfoList is None:
+		return None
+
+	for artworkInfo in artworkInfoList.iter('ArtworkInfo'):
+		artworkType = artworkInfo.find("Type").text
+		if artworkType == "fanart":
+			return PVR_URL + artworkInfo.find("URL").text
+
+	return None
+
+def GetSeriesFanartFromId(recordings, seriesName):
+	return None
+
+
+def MakeTitle(groupBy, filterBy):
+    readableGroupBy = GetReadableKeyName(groupBy)
+    if len(filterBy) == 0:
+        title = 'By %s' % readableGroupBy
     else:
         title = ""
-        for n in range(0, len(filterKeyNames)):
-            keyN = filterKeyNames[n]
-            valueN = filterKeyValues[n]
-            title = title + ', %s "%s"' % (keyN, valueN)
-        title = title + ', by %s' % groupBy
+        for keyN, valueN in filterBy.items():
+            readableKeyN = GetReadableKeyName(keyN)
+            title = title + ', %s "%s"' % (readableKeyN, valueN)
+        title = title + ', by %s' % readableGroupBy
         title = title[2:] # remove starting ", "
     return title
 
 def CamelCase(src):
-    #return ''.join(x for x in src.title() if not x.isspace())
-    return src.title().replace(' ', '')
+    #return src.title().replace(' ', '')
+    result = re.sub(r'\W+', '', src.title())
+    #Log("RESULT: %s => %s" % (src, result))
+    return result
 
 
 ####################################################################################################
@@ -238,34 +323,38 @@ def CamelCase(src):
 # The resulting list of recordings is sorted by the element identified by the sortKeyName parameter
 # (another XPATH expression)
 ####################################################################################################
-@route('/video/mythrecordings/GetRecordingList', filterKeyNames=list, filterKeyValues=list, allow_sync=True)
-def GetRecordingList(filterKeyNames, filterKeyValues, sortKeyName = None, sortReverse = True, backgroundName = ''):
+@route('/video/mythrecordings/GetRecordingList', filterBy = dict, allow_sync=True)
+def GetRecordingList(filterBy = {}, sortKeyName = None, sortReverse = True, backgroundUrl = None):
 	url = PVR_URL + 'Dvr/GetRecordedList'
-	Log('GetRecordingList(filterKeyNames="%s", filterKeyValues="%s", sortKeyName="%s"): Loading URL %s' % (filterKeyNames, filterKeyValues, sortKeyName, url))
+	Log("GetRecordingList(filterBy = %s, sortKeyName = %s, sortReverse = %s, backgroundUrl = %s)" % (filterBy, sortKeyName, sortReverse, backgroundUrl))
 
 	title2= "By title"
-	if not filterKeyValues is None:
-		title2 = " - ".join(filterKeyValues)
-
-	oc = ObjectContainer(title2 = title2)
-
-	if not backgroundName == '':
-		oc.art = R(backgroundName)
-
-	recordings = GetMythTVRecordings(filterKeyNames, filterKeyValues)
+	if len(filterBy) > 0:
+		title2 = " - ".join(filterBy.keys())
 	
+	oc = ObjectContainer(title2 = title2, art = backgroundUrl)
+	#oc = ObjectContainer(title2 = title2, title1 = "CategoryBackground_Sport.png", art = R("CategoryBackground_Sport.png"))
+	
+	#if backgroundUrl:
+	#	oc.art = backgroundUrl
+
+	recordings = GetMythTVRecordings(filterBy)
+
+	# Sorting the list:
 	if (sortKeyName is not None):
 		recordings.sort(key=lambda rec: rec.find(sortKeyName).text, reverse=sortReverse)
 	
 	for recording in recordings:
-		oc.add(Recording(recording, backgroundName))
+		recordingEntry = Recording(recording, backgroundUrl)
+		#recordingEntry.title = backgroundUrl
+		oc.add(recordingEntry)
 			
 	return oc
 
 
 
 ####################################################################################################
-def Recording(recording, backgroundName = ''):
+def Recording(recording, backgroundUrl = None):
 	
 	# Mandatory properties: Title, Channel, StartTime, EndTime:
 	# =========================================================
@@ -301,7 +390,7 @@ def Recording(recording, backgroundName = ''):
 	else:
 		testURL = PVR_URL + 'Content/GetRecording?ChanId=%s&StartTime=%s' % (chanId,recordingStart,)
 	
-	Log('Recording: Name "%s" => URL="%s"' % (showname, testURL))
+	#Log('Recording: Name "%s" => URL="%s"' % (showname, testURL))
 
 
 	# Optional properties:
@@ -314,10 +403,12 @@ def Recording(recording, backgroundName = ''):
 	try:
 		#epname = recording.find('SubTitle').text
 		epname = GetField(recording, 'SubTitle')
-		epname = "%s (%s)" % (epname, shouldStart.strftime('%Y-%m-%d %H:%M'))
+		epname = "%s (%s)" % (epname, shouldStart.strftime('%Y-%m-%d'))
 	except:
 		Warning('Recording: Recording: "%s" had no SubTitle - using date' % showname)
 		epname = shouldStart.strftime('%Y-%m-%d')
+
+	#Log("EPNAME = %s" % epname)
 
 	# Still recording?
 	# ================
@@ -396,6 +487,8 @@ def Recording(recording, backgroundName = ''):
 		header = showname
 	if stillRecording:
 		header = header + " (STILL RECORDING)"
+	#status = recording.find('Recording/Status').text
+	#header = "(" + status + ") " + header
 
 	# Screenshot:
 	# ===========
@@ -410,9 +503,9 @@ def Recording(recording, backgroundName = ''):
                 summary = str(warning) + str(descr),
                 originally_available_at = shouldStart,
                 thumb = thumb,
-		art = R(backgroundName),
+		art = backgroundUrl,
 		duration = int(duration),
-		key = Callback(RecordingInfo, chanId=chanId, startTime=recordingStart, backgroundName=backgroundName),
+		key = Callback(RecordingInfo, chanId=chanId, startTime=recordingStart, backgroundUrl=backgroundUrl),
 		rating_key= str(int(shouldStart.strftime('%Y%m%d%H%M'))),
 		items = [
 			MediaObject(
@@ -439,18 +532,18 @@ def Recording(recording, backgroundName = ''):
 #    ObjectContainer
 ####################################################################################################
 @route('/video/mythrecordings/GetRecordingInfo', allow_sync=True)
-def RecordingInfo(chanId, startTime, backgroundName):
+def RecordingInfo(chanId, startTime, backgroundUrl):
 	url = PVR_URL + 'Dvr/GetRecorded?StartTime=%s&ChanId=%s' % (startTime, chanId)
 	request = urllib2.Request(url, headers={"Accept" : "application/xml"})
-	Log('RecordingInfo(chanId="%s", startTime="%s" backgroundName="%s"): opening %s' % (chanId, startTime, url))
+	#Log('RecordingInfo(chanId="%s", startTime="%s" backgroundUrl="%s"): opening %s' % (chanId, startTime, backgroundUrl, url))
 	u = urllib2.urlopen(request)
 	tree = ET.parse(u)
 	root = tree.getroot()
 
 	recording = root #.findall('Programs/Program')
 
-	recording_object = Recording(recording, backgroundName)
-	return ObjectContainer(objects=[recording_object], art=R(backgroundName))
+	recording_object = Recording(recording, backgroundUrl)
+	return ObjectContainer(objects=[recording_object], art=backgroundUrl)
 
 
 ####################################################################################################
@@ -462,12 +555,15 @@ def RecordingInfo(chanId, startTime, backgroundName):
 #    list of recording (the structure of a recording is irrelevant - use GetField to
 #                       retrieve the value of a field)
 ####################################################################################################
-def GetMythTVRecordings(filterKeyNames, filterKeyValues):
+def GetMythTVRecordings(filterBy):
 	url = PVR_URL + 'Dvr/GetRecordedList'
-	request = urllib2.Request(url, headers={"Accept" : "application/xml"})
-	u = urllib2.urlopen(request)
-	tree = ET.parse(u)
-	root = tree.getroot()
+	xmlstring = HTTP.Request(url, cacheTime = CACHE_TIME).content
+	root = ET.fromstring(xmlstring)
+	
+	#request = urllib2.Request(url, headers={"Accept" : "application/xml"})
+	#u = urllib2.urlopen(request)
+	#tree = ET.parse(u)
+	#root = tree.getroot()
 	
 	# Loop through recordings, filtering as specified:
 	recordings = root.findall('Programs/Program')
@@ -477,19 +573,21 @@ def GetMythTVRecordings(filterKeyNames, filterKeyValues):
 			continue
 		if recording.find('Recording/RecGroup').text == 'LiveTV':
 			continue
+		if recording.find('FileSize').text == '0':
+			continue
+		#if recording.find('Recording/Status').text == '3':
+		#	continue
 		if recording.find('Title').text == 'Unknown':
 			continue
-		if not Match(filterKeyNames, filterKeyValues, recording):
+		if not Match(filterBy, recording):
 			continue
 
 		result.append(recording)
 
 	return result
 
-def Match(filterKeyNames, filterKeyValues, recording):
-	for n in range(0, len(filterKeyNames)):
-		filterKeyName = filterKeyNames[n]
-		filterKeyValue = filterKeyValues[n]
+def Match(filterBy, recording):
+	for filterKeyName, filterKeyValue in filterBy.items():
 		actualFilterKeyValue = GetField(recording, filterKeyName)
 		if not actualFilterKeyValue == filterKeyValue:
 			return False
@@ -526,7 +624,7 @@ def GetField(recording, fieldName):
 
 		if fieldName == "Title":
 			return title
-		if fieldName == SubTitle:
+		if fieldName == 'SubTitle':
 			return subtitle
 
 	if fieldName == "Category":

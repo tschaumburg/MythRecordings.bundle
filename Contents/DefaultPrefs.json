@@ -12,6 +12,12 @@
         "default": "6544" 
     },
     {
+        "id": "cacheTime",
+        "type": "text",
+        "label": "Cache time (sec)",
+        "default": "120" 
+    },
+    {
         "id": "showByRecordingGroup",
         "label": "Show recordings sorted by MythTV recording group",
         "type": "bool",
