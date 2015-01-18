@@ -13,13 +13,14 @@ VIDEO_PREFIX = "/video/mythrecordings"
 
 NAME = "MythTV recordings"
 ART  = 'item-default.png'
+BACKGROUND  = 'background-default.png'
 BY_NAME  = 'by-name.png'
 BY_DATE  = 'by-date.png'
 BY_CATEGORY  = 'by-category.png'
 PVR_URL = 'http://%s:%s/' % (Prefs['server'],Prefs['port'])
 TITLE_SPLITTERS = ['-', ':']
 CACHE_TIME = int(Prefs['cacheTime'])
-
+SERIES_SUPPORT = True
 
 
 ####################################################################################################
@@ -46,7 +47,7 @@ ReadableKeyNames = \
     {
         "Recording/RecGroup": "Recording group",
         "Channel/ChannelName": "Channel name",
-        "StartTime": "Start time"
+        "StartTime": "Recording date"
     }
 
 def GetReadableKeyName(keyname):
@@ -77,12 +78,12 @@ def Start():
 ####################################################################################################
 @handler('/video/mythrecordings','MythTV recordings')
 def MainMenu():
-    dir=ObjectContainer()
+    dir=ObjectContainer(art = R(BACKGROUND))
 
     # By title:
     dir.add(
         DirectoryObject(
-            key=Callback(GroupRecordingsBy, groupBy=['Title']), 
+            key=Callback(GroupRecordingsBy, groupByList=['Title']), 
             title='By title', 
             thumb=R(BY_NAME)
         )
@@ -91,7 +92,7 @@ def MainMenu():
     # By category, then by title:
     dir.add(
         DirectoryObject(
-            key=Callback(GroupRecordingsBy, groupBy=['Category', 'Title']), 
+            key=Callback(GroupRecordingsBy, groupByList=['Category', 'Title']), 
             title='By category', 
             thumb=R(BY_CATEGORY)
         )
@@ -102,7 +103,7 @@ def MainMenu():
     if showByRecordingGroup:
         dir.add(
             DirectoryObject(
-                key=Callback(GroupRecordingsBy, groupBy=['Recording/RecGroup']), 
+                key=Callback(GroupRecordingsBy, groupByList=['Recording/RecGroup']), 
                 title='By recording group'
             )
         )
@@ -112,7 +113,7 @@ def MainMenu():
     if showByChannelName:
         dir.add(
             DirectoryObject(
-                key=Callback(GroupRecordingsBy, groupBy=['Channel/ChannelName']), 
+                key=Callback(GroupRecordingsBy, groupByList=['Channel/ChannelName']), 
                 title='By channel'
             )
         )
@@ -158,43 +159,41 @@ def MainMenu():
 #
 # Returns:
 #    ObjectContainer
+#
+#
+# Experimental series handling:
+# ------------------------------
+# In case the group-by key is "Title", the set of recordings for each value of title
+# will be searched for the "inetref" key, indicating that this is the episode of
+# a series.
+#
+# If inetref exists, the icon and background images for that series will be retrieved
+# from the MythTV server
+#
 ####################################################################################################
-# Call: 
-#    filterBy={"Category":"series", "Title": "CSI: New York"}, backgroundName="TitleBackground_CsiNewYork.png", groupBy=[]
-# Returns:
-#    <MediaContainer
-#       title1="MythTV recordings" 
-#       title2="Category - Title" 
-#       size="98" 
-#       identifier="dk.schaumburg-it.plexapp.mythrecordings" 
-#       sourceTitle="MythTV recordings" 
-#       mediaTagPrefix="/system/bundle/media/flags/" 
-#       mediaTagVersion="1420832128" 
-#       prefsKey="/:/plugins/dk.schaumburg-it.plexapp.mythrecordings/prefs" 
-#       allowSync="1"
-#   >
-@route('/video/mythrecordings/GroupRecordingsBy', filterBy = dict, groupBy = list, allow_sync=True) 
-def GroupRecordingsBy(groupBy = [], filterBy = {}, backgroundUrl = None):
-	Log("GroupRecordingsBy(groupBy = %s, filterBy = %s, backgroundUrl = %s)" % (groupBy, filterBy, backgroundUrl))
-	if groupBy is None:
-		groupBy = []
+@route('/video/mythrecordings/GroupRecordingsBy', filterBy = dict, groupByList = list, allow_sync=True) 
+def GroupRecordingsBy(groupByList = [], filterBy = {}, seriesInetRef = None, staticBackground = None):
+	Log("GroupRecordingsBy(groupByList = %s, filterBy = %s, seriesInetRef = %s, staticBackground = %s)" % (groupByList, filterBy, seriesInetRef, staticBackground))
+	if groupByList is None:
+		groupByList = []
 
 	if filterBy is None:
 		filterBy = {}
 
-	if len(groupBy)==0:
-		#Log("RECLIST, backgroundUrl = %s" % backgroundUrl)
-		return GetRecordingList(filterBy=filterBy, sortKeyName='StartTime', backgroundUrl = backgroundUrl)
+	if len(groupByList)==0:
+		return GetRecordingList(filterBy=filterBy, sortKeyName='StartTime', seriesInetRef = seriesInetRef, staticBackground = staticBackground)
+	
+	groupByKey = groupByList[0]
+	del groupByList[0]
 
-	keyName = groupBy[0]
-	del groupBy[0]
-
-	Log("GroupRecordingsBy(%s)" % keyName)
-	iconPrefix = "%sIcon_" % CamelCase(GetReadableKeyName(keyName))
-	backgroundPrefix = "%sBackground_" % CamelCase(GetReadableKeyName(keyName))
+	iconPrefix = "%sIcon_" % CamelCase(GetReadableKeyName(groupByKey))
+	backgroundPrefix = "%sBackground_" % CamelCase(GetReadableKeyName(groupByKey))
 	
 	# Determine a good top-of-page title:
-        title = MakeTitle(keyName, filterBy)
+        title = MakeTitle(filterBy, groupByKey)
+
+	# Find a background image:
+	backgroundUrl = GetSeriesBackground(seriesInetRef, staticBackground)
 
 	oc = ObjectContainer(title2=title, art=backgroundUrl) # title1 is not displayed (on most clients, anyway)
 	
@@ -204,7 +203,7 @@ def GroupRecordingsBy(groupBy = [], filterBy = {}, backgroundUrl = None):
 	# Sort the recordings into a {string : list} dictionary
 	entries = {}
 	for recording in recordings:
-		keyValue = GetField(recording, keyName)
+		keyValue = GetField(recording, groupByKey)
 
 		if not entries.has_key(keyValue):
 			entries[keyValue] = []
@@ -213,49 +212,42 @@ def GroupRecordingsBy(groupBy = [], filterBy = {}, backgroundUrl = None):
 	# Loop through each of the keys and create a subdirectory entry:
 	for subdirName in entries.keys():
                 subdirFilterBy = filterBy.copy()
-                subdirFilterBy[keyName] = subdirName
-
-		iconName = '%s%s.png' % (iconPrefix, CamelCase(subdirName))
-		#Log('iconName = %s' % iconName)
-		iconUrl = R(iconName)
-		backgroundUrl = R('%s%s.png' % (backgroundPrefix, CamelCase(subdirName)))
-		#Log('backgroundUrl = %s' % backgroundUrl)
+                subdirFilterBy[groupByKey] = subdirName
 
 		subdirContents = entries[subdirName]
 		entryTitle = "%s (%s)" % (subdirName, len(subdirContents))
 		
-		if len(subdirContents) == 1:
+		# Static background image for subdirectory entry:
+		subdirStaticBackground = '%s%s.png' % (backgroundPrefix, CamelCase(subdirName))
+		
+		# Special case: see if this is the list of episodes in a series
+		subSeriesInetRef = None
+		if groupByKey == "Title":
+			subSeriesInetRef = GetInetref(subdirContents)
+
+		# Icon for subdirectory entry:		
+		iconUrl = GetSeriesIcon(subSeriesInetRef, subdirStaticBackground)
+
+		if len(subdirContents) == 1 and groupByKey == "Title": 
                         # Experimental:
                         # =============
                         # If the subdirectory we're about to create only contains a
-                        # single entry, we'll save the directory and just put the
+                        # single entry, we'll save the extra level and just put the
                         # recording in.
 			recording = subdirContents[0]
-			oc.add(Recording(recording, backgroundUrl))
+			oc.add(Recording(recording, subSeriesInetRef))
 		else:
                         # Otherwise, we'll play it straight and put in a DirectoryObject
                         # referencing the next level down
-
-			# Special case: see if this is the list of episodes in a series	
-			lastGroupedBy = keyName
-			if lastGroupedBy == "Title":
-				seriesName = subdirName
-				backgroundUrl = GetSeriesFanartFromName(subdirContents, seriesName)
-				iconUrl = backgroundUrl
-			if lastGroupedBy == "SeriesId":
-				seriesId = subdirName
-				backgroundUrl = GetSeriesFanartFromId(subdirContents, seriesId)
-				iconUrl = backgroundUrl
-	
-			Log("Calling GroupRecordingsBy(groupBy = %s, filterBy = %s, backgroundUrl = %s)" % (groupBy, subdirFilterBy, backgroundUrl))
 			oc.add(
                             DirectoryObject(
                                 key=
                                     Callback(
                                         GroupRecordingsBy,
                                         filterBy=subdirFilterBy,
-                                        groupBy=groupBy,
-                                        backgroundUrl=backgroundUrl
+                                        groupByList=groupByList,
+                                        seriesInetRef=subSeriesInetRef,
+					staticBackground = subdirStaticBackground
                                     ), 
                                 title=entryTitle, 
                                 thumb=iconUrl
@@ -265,51 +257,82 @@ def GroupRecordingsBy(groupBy = [], filterBy = {}, backgroundUrl = None):
 	oc.objects.sort(key=lambda obj: obj.title)
 	return oc
 
-def GetSeriesFanartFromName(recordings, seriesName):
-	return GetSeriesFanartFromFieldValue(recordings, "Title", seriesName)
 
-def GetSeriesFanartFromId(recordings, seriesId):
-	return GetSeriesFanartFromFieldValue(recordings, "SeriesId", seriesId)
+####################################################################################################
+# Series meta-data:
+# =================
+# Get metadata about a series, as recorded by MythTV
+####################################################################################################
 
-def GetSeriesFanartFromFieldValue(recordings, fieldName, fieldValue):
-	for recording in recordings:
-		val = GetField(recording, fieldName)
-		if val == fieldValue:
-			artworkInfoList = recording.find("Artwork/ArtworkInfos")
-			if not artworkInfoList is None:
-				break
-
-	if artworkInfoList is None:
+def GetInetref(recordings):
+	if not SERIES_SUPPORT:
 		return None
 
-	for artworkInfo in artworkInfoList.iter('ArtworkInfo'):
-		artworkType = artworkInfo.find("Type").text
-		if artworkType == "fanart":
-			return PVR_URL + artworkInfo.find("URL").text
-
+	for recording in recordings:
+		val = GetField(recording, 'Inetref')
+		if not val is None:
+			return val
 	return None
 
-def GetSeriesFanartFromId(recordings, seriesName):
-	return None
+def GetSeriesIcon(inetref, staticBackground):
+	return GetSeriesBackground(inetref, staticBackground)
+
+def GetSeriesBackground(inetref, staticBackground):
+	# We MUST have a fallback image:
+	if staticBackground is None:
+		staticBackground = BACKGROUND
+
+	# If this is not defined as a series, return the static image:
+	if inetref is None:
+		return R(staticBackground)
+
+	# OK, so it's a series - let's look for artwork:
+	url = "%sContent/GetRecordingArtwork?Inetref=%s&Type=fanart" % (PVR_URL, inetref)
+
+	# Test if URL responds - otherwise fall back to static background:
+	try:
+		resourceVal = HTTP.Request(url, cacheTime = CACHE_TIME).content
+	except:
+		return R(staticBackground)
+
+	# If no artwork is defined on the MythTV server, an XML error message
+	# is returned instead of an image.
+	try:
+		# To detect this, we try to parse the returned data as XML - which
+		# will fail if it's a proper image:
+		detail = ET.fromstring(resourceVal)
+
+		# if we get here, the URL returned a "no artwork defined" error:
+		return R(staticBackground) 
+	except:
+		# If parsing as XML failed, we'll assume it's binary image data,
+		# and everything is OK:
+		return url
+
+	# We shouldn't ever get here, but to be on the safe side:
+	return R(staticBackground)
 
 
-def MakeTitle(groupBy, filterBy):
-    readableGroupBy = GetReadableKeyName(groupBy)
+####################################################################################################
+# Title handling:
+# ===============
+####################################################################################################
+
+def MakeTitle(filterBy, groupByKey):
+    readableGroupByKey = GetReadableKeyName(groupByKey)
     if len(filterBy) == 0:
-        title = 'By %s' % readableGroupBy
+        title = 'By %s' % readableGroupByKey
     else:
         title = ""
-        for keyN, valueN in filterBy.items():
-            readableKeyN = GetReadableKeyName(keyN)
-            title = title + ', %s "%s"' % (readableKeyN, valueN)
-        title = title + ', by %s' % readableGroupBy
+        for filterKeyName, filterKeyNameValue in filterBy.items():
+            readableFilterKeyName = GetReadableKeyName(filterKeyName)
+            title = title + ', %s "%s"' % (readableFilterKeyName, filterKeyNameValue)
+        title = title + ', by %s' % readableGroupByKey
         title = title[2:] # remove starting ", "
     return title
 
 def CamelCase(src):
-    #return src.title().replace(' ', '')
     result = re.sub(r'\W+', '', src.title())
-    #Log("RESULT: %s => %s" % (src, result))
     return result
 
 
@@ -319,25 +342,20 @@ def CamelCase(src):
 # Creates a directory (ObjectContainer) listing all the recordings where the contents of the element
 # identified by the filterKeyNames parameter (a lis of XPATH expressions) matches filterKeyValues. The
 # values are subject to the same aliasing mechanism described for GroupRecordingsBy above.
-# 
+#
+# Each entry in the recording list will have an icon (thumb) that is a Preview Image from the recording,
+# as supplied by MythTV.
+#
 # The resulting list of recordings is sorted by the element identified by the sortKeyName parameter
 # (another XPATH expression)
 ####################################################################################################
 @route('/video/mythrecordings/GetRecordingList', filterBy = dict, allow_sync=True)
-def GetRecordingList(filterBy = {}, sortKeyName = None, sortReverse = True, backgroundUrl = None):
-	url = PVR_URL + 'Dvr/GetRecordedList'
-	Log("GetRecordingList(filterBy = %s, sortKeyName = %s, sortReverse = %s, backgroundUrl = %s)" % (filterBy, sortKeyName, sortReverse, backgroundUrl))
+def GetRecordingList(filterBy = {}, sortKeyName = None, sortReverse = True, seriesInetRef = None, staticBackground = None):
+	#url = PVR_URL + 'Dvr/GetRecordedList'
 
-	title2= "By title"
-	if len(filterBy) > 0:
-		title2 = " - ".join(filterBy.keys())
+	backgroundUrl = GetSeriesBackground(seriesInetRef, staticBackground)
+	oc = ObjectContainer(title2 = MakeTitle(filterBy, sortKeyName), art = backgroundUrl)
 	
-	oc = ObjectContainer(title2 = title2, art = backgroundUrl)
-	#oc = ObjectContainer(title2 = title2, title1 = "CategoryBackground_Sport.png", art = R("CategoryBackground_Sport.png"))
-	
-	#if backgroundUrl:
-	#	oc.art = backgroundUrl
-
 	recordings = GetMythTVRecordings(filterBy)
 
 	# Sorting the list:
@@ -345,8 +363,7 @@ def GetRecordingList(filterBy = {}, sortKeyName = None, sortReverse = True, back
 		recordings.sort(key=lambda rec: rec.find(sortKeyName).text, reverse=sortReverse)
 	
 	for recording in recordings:
-		recordingEntry = Recording(recording, backgroundUrl)
-		#recordingEntry.title = backgroundUrl
+		recordingEntry = Recording(recording, seriesInetRef)
 		oc.add(recordingEntry)
 			
 	return oc
@@ -354,7 +371,8 @@ def GetRecordingList(filterBy = {}, sortKeyName = None, sortReverse = True, back
 
 
 ####################################################################################################
-def Recording(recording, backgroundUrl = None):
+def Recording(recording, seriesInetRef = None, staticBackground = None):
+	Log("Recording(recording = %s, seriesInetRef = %s, staticBackground = %s)" % (recording, seriesInetRef, staticBackground))
 	
 	# Mandatory properties: Title, Channel, StartTime, EndTime:
 	# =========================================================
@@ -497,7 +515,11 @@ def Recording(recording, backgroundUrl = None):
 	else:
 		thumb = R(ART)
 
+	# Background image:
+	# =================
+	backgroundUrl = GetSeriesBackground(seriesInetRef, staticBackground)
 
+	Log("ICON(%s) => %s" % (header, thumb))
 	return VideoClipObject(
                 title = header,
                 summary = str(warning) + str(descr),
@@ -505,7 +527,7 @@ def Recording(recording, backgroundUrl = None):
                 thumb = thumb,
 		art = backgroundUrl,
 		duration = int(duration),
-		key = Callback(RecordingInfo, chanId=chanId, startTime=recordingStart, backgroundUrl=backgroundUrl),
+		key = Callback(RecordingInfo, chanId=chanId, startTime=recordingStart, seriesInetRef=seriesInetRef),
 		rating_key= str(int(shouldStart.strftime('%Y%m%d%H%M'))),
 		items = [
 			MediaObject(
@@ -532,17 +554,21 @@ def Recording(recording, backgroundUrl = None):
 #    ObjectContainer
 ####################################################################################################
 @route('/video/mythrecordings/GetRecordingInfo', allow_sync=True)
-def RecordingInfo(chanId, startTime, backgroundUrl):
+def RecordingInfo(chanId, startTime, seriesInetRef):
 	url = PVR_URL + 'Dvr/GetRecorded?StartTime=%s&ChanId=%s' % (startTime, chanId)
 	request = urllib2.Request(url, headers={"Accept" : "application/xml"})
-	#Log('RecordingInfo(chanId="%s", startTime="%s" backgroundUrl="%s"): opening %s' % (chanId, startTime, backgroundUrl, url))
+	#Log('RecordingInfo(chanId="%s", startTime="%s" seriesInetRef="%s"): opening %s' % (chanId, startTime, seriesInetRef, url))
 	u = urllib2.urlopen(request)
 	tree = ET.parse(u)
 	root = tree.getroot()
 
 	recording = root #.findall('Programs/Program')
 
-	recording_object = Recording(recording, backgroundUrl)
+	# Background image:
+	# =================
+	backgroundUrl = GetSeriesBackground(seriesInetRef, None)
+
+	recording_object = Recording(recording, seriesInetRef)
 	return ObjectContainer(objects=[recording_object], art=backgroundUrl)
 
 
