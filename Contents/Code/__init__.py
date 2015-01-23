@@ -97,7 +97,11 @@ def GetReadableKeyName(keyname):
 #    {Title = "Sherlock Holmes", Subtitle = "A Scandal in Belgravia - British series, 2012"}
 #    {Title = "Sherlock Holmes", Subtitle = "The Hounds of Baskerville - British series, 2012"}
 #
+# However, there are titles that SHOULD contain a splitter (such as "CSI: New York"). These
+# titles are protected by adding a regular expression to the TITLE_NOSPLITTERS collection
+#
 TITLE_SPLITTERS = ['-', ':']
+TITLE_NOSPLITTERS = ["^CSI: New York"]
 
 # Category aliases
 # ================
@@ -728,14 +732,23 @@ def GetField(recording, fieldName):
 	if fieldName == "Title" or fieldName == "SubTitle":
 		subtitle = recording.find('SubTitle').text
 		title = recording.find('Title').text
+		
+		dontSplit = False
+		for nosplitter in TITLE_NOSPLITTERS:
+			dontSplit = re.search(nosplitter, title)
+			if dontSplit:
+				break
 
-		# If subtitle is empty, we try splitting the title:
-		if subtitle is None or subtitle == "":# or "" == "":
+		if not dontSplit:
 			for splitter in TITLE_SPLITTERS:
 				splitResult = title.split(splitter, 1)
 				if len(splitResult) == 2:
 					orgTitle = title
-					title,subtitle = splitResult
+					title,newsubtitle = splitResult
+					title = title.strip()
+					newsubtitle = newsubtitle.strip()
+					if subtitle:
+						subtitle = newsubtitle + " - " + subtitle
 					#Log('Split title "%s" into ("%s", "%s")' % (orgTitle, title, subtitle))
 					break
 
