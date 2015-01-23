@@ -367,44 +367,46 @@ def InternalGetImage(inetref, staticBackground, fallback):
 	# OK, so it's a series - let's look for artwork:
 	url = "%sContent/GetRecordingArtwork?Inetref=%s&Type=fanart" % (PVR_URL, inetref)
 
-	# Test if URL responds - otherwise fall back to static background:
-	try:
-		resourceVal = HTTP.Request(url, cacheTime = CACHE_TIME).content
-	except:
-		return R2(staticBackground, fallback)
+	return Resource.ContentsOfURLWithFallback(url = [url, staticBackground, fallback])
+	
+	# # Test if URL responds - otherwise fall back to static background:
+	# try:
+	# 	resourceVal = HTTP.Request(url, cacheTime = CACHE_TIME).content
+	# except:
+	# 	return R2(staticBackground, fallback)
 
-	# If no artwork is defined on the MythTV server, an XML error message
-	# is returned instead of an image.
-	try:
-		# To detect this, we try to parse the returned data as XML - which
-		# will fail if it's a proper image:
-		detail = ET.fromstring(resourceVal)
-
-		# if we get here, the URL returned a "no artwork defined" error:
-		return R(staticBackground) 
-	except:
-		# If parsing as XML failed, we'll assume it's binary image data,
-		# and everything is OK:
-		return url
-
+	# # If no artwork is defined on the MythTV server, an XML error message
+	# # is returned instead of an image.
+	# try:
+	# 	# To detect this, we try to parse the returned data as XML - which
+	# 	# will fail if it's a proper image:
+	# 	detail = ET.fromstring(resourceVal)
+	# 
+	# 	# if we get here, the URL returned a "no artwork defined" error:
+	# 	return R(staticBackground) 
+	# except:
+	# 	# If parsing as XML failed, we'll assume it's binary image data,
+	# 	# and everything is OK:
+	# 	return url
+	# 
 	# We shouldn't ever get here, but to be on the safe side:
-	return R2(staticBackground, fallback)
+	# return R2(staticBackground, fallback)
 
-def R2(resource, fallback):
-	return Callback(MakeImage2, resource=resource, fallback=fallback)
+# def R2(resource, fallback):
+# 	return Callback(MakeImage2, resource=resource, fallback=fallback)
 
-@route('/video/mythrecordings/MakeImage2') 
-def MakeImage2(resource, fallback):
-	try: 
-		data = Resource.Load(resource) #HTTP.Request(R(resource), cacheTime = CACHE_1MONTH).content 
-		if not data:
-			Log("IMAGE: %s doesn't exist - falling back to %s" % (R(resource), fallback))
-			return Redirect(R(fallback)) #Redirect(R(fallback))
-		Log("IMAGE: returning %s" % resource)
-		return Redirect(R(resource)) #DataObject(data, 'image/jpeg') 
-	except:
-		Log("IMAGE: %s doesn't exist - falling back to %s" % (R(resource), fallback))
-		return Redirect(R(fallback)) #Redirect(R(fallback))
+# @route('/video/mythrecordings/MakeImage2') 
+# def MakeImage2(resource, fallback):
+# 	try: 
+# 		data = Resource.Load(resource) #HTTP.Request(R(resource), cacheTime = CACHE_1MONTH).content 
+# 		if not data:
+# 			Log("IMAGE: %s doesn't exist - falling back to %s" % (R(resource), fallback))
+# 			return Redirect(R(fallback)) #Redirect(R(fallback))
+# 		Log("IMAGE: returning %s" % resource)
+# 		return Redirect(R(resource)) #DataObject(data, 'image/jpeg') 
+# 	except:
+# 		Log("IMAGE: %s doesn't exist - falling back to %s" % (R(resource), fallback))
+# 		return Redirect(R(fallback)) #Redirect(R(fallback))
 
 ####################################################################################################
 # Title handling:
