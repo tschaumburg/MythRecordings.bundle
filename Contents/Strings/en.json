@@ -1,59 +1,32 @@
 {
-	"DEVICE_OFFLINE_TITLE"        : "Unable to connect!", 
-	"DEVICE_OFFLINE_MSG"          : "Your EyeTV seems to be offline!?",
-
-	"FEATURE_UNAVAIL_TITLE"       : "Feature not available!",
-	"FEATURE_UNAVAIL_MSG"         : "This feature is not available for the configured device type.",
-
-	"PREFS_CHANGED_TITLE"         : "Some of your settings where adjusted!",
-
-	"PREFS_CHANGED_EPG"           : "EPG has been disabled (token invalid or device type: browser).",
-	"PREFS_TOKEN_INVALID"         : "Your token is invalid (to short / invalid characters).",
-	"PREFS_CHANGED_HOST"          : "127.0.0.1 / localhost was changed to %s.",
-
-	"MAIN_MENU_CHANNELS"          : "Live-TV",
-	"MAIN_MENU_EPG"               : "EPG",
-	"MAIN_MENU_SCHEDULES"         : "Manage scheduled recordings",
-	"MAIN_MENU_PREFS"             : "Preferences",
-
-	"PREFS_TOKEN_WIZARD"          : "Token Wizard",
-	"PREFS_SETTINGS"              : "Settings",
-
-	"PREFS_TOKEN_WIZ_STEP1"       : "Open the Preferences on your %s.",
-	"PREFS_TOKEN_WIZ_STEP2"       : "Choose \"WLAN\".",
-	"PREFS_TOKEN_WIZ_STEP3"       : "Open the details of your active connection.",
-	"PREFS_TOKEN_WIZ_STEP4"       : "Enable \"Manual\" HTTP-Proxy.",
-	"PREFS_TOKEN_WIZ_STEP5"       : "Enter %s for Server and 2171 for Port. (If that doesnt work try %s)",
-	"PREFS_TOKEN_WIZ_STEP6"       : "Go back to the overview.",
-	"PREFS_TOKEN_WIZ_STEP7"       : "Close preferences.",
-	"PREFS_TOKEN_WIZ_STEP8"       : "Press \"Next\" on this Wizard,\nthen on your %s open EyeTV and try browsing the EPG.\n!!! You have only about 20sec, so be ready !!!",
-	"PREFS_TOKEN_WIZ_STEP9_0"     : "Sorry, an error occured.\nMaybe try again.\n(error: %s)",
-	"PREFS_TOKEN_WIZ_STEP9_1"     : "Your token was saved:\n%s\n",
-	"PREFS_TOKEN_WIZ_STEP9_2"     : "Please disable the \"Manual\" proxy in your Preferences.app!",
-	"PREFS_TOKEN_WIZ_NEXT"        : "Next",
-	"PREFS_TOKEN_WIZ_DONE"        : "Done",
-
-	"ERROR_TITLE"                 : "Error",
-
-	"CHANNELS_TITLE"              : "Channel List",
-	"CHANNELS_ALL_CHANNELS"       : "All Channels",
-
-	"CHANNEL_WATCH_NOW"           : "Watch \"%s\"",
-	"CHANNEL_DETAILS"             : "Show Details",
-	"CHANNEL_EPG"                 : "Channel EPG",
-
-	"SCHEDULES_LIST_EMPTY"        : "No recordings scheduled",
-	"SHOW_RECORD_SET"             : "Schedule recording",
-	"SHOW_RECORD_DEL"             : "Don't record",
-	
-	"SHOW_RECORD_SCHEDULED_TITLE" : "Schedule recording",
-	"SHOW_RECORD_SCHEDULED_MSG"   : "Show will be recorded.",
-
-	"SHOW_RECORD_FAILED_TITLE"    : "Recording Error",
-	"SHOW_RECORD_FAILED_MSG"      : "Scheduling failed!",
-	
-	"EPG_NOT_AVAILABLE"           : "no EPG data available",
-	"EPG_NOW"                     : "Airing now",
-	"EPG_NEXT"                    : "Up next",
-	"EPG_LIST_TITLE"              : "EPG"
+	"MythTV recordings"  : "MythTV recordings",
+	"Recording group"    : "Recording group",
+	"Channel name"       : "Channel name",
+	"Recording date"     : "Recording date",
+	"Serie"              : "Serie",
+	"Children"           : "Children",
+	"Documentary"        : "Documentary",
+	"Uncategorized"      : "Uncategorized",
+	"By title"           : "By title",
+	"By category"        : "By category",
+	"By recording group" : "By recording group",
+	"By channel"         : "By channel",
+	"By recording date"  : "By recording date",
+	"Configure how to connect to the MythTV backend" : "Configure how to connect to the MythTV backend",
+	"By %s"              : "By %s",
+	"by %s"              : "by %s",
+	'Recording: Recording: "%s" had no SubTitle - using date' : 'Recording: Recording: "%s" had no SubTitle - using date',
+	'Recording: Recording: "%s", Duration error, Unexpected error' : 'Recording: Recording: "%s", Duration error, Unexpected error',
+	"WARNING: Recording may have missed both start and end of program (by %s and %s, respectively)\n" : "WARNING: Recording may have missed both start and end of program (by %s and %s, respectively)\n",
+	"WARNING: Recording may have missed start of program by %s\n" : "WARNING: Recording may have missed start of program by %s\n",
+	"WARNING: Recording may have missed end of program by %s\n" : "WARNING: Recording may have missed end of program by %s\n",
+	"STILL RECORDING"    : "STILL RECORDING",
+	'Recording: Recording: "%s", Duration error, Unexpected error' : 'Recording: Recording: "%s", Duration error, Unexpected error',
+	'Recording: Recording: "%s", Descr error, Unexpected error' : 'Recording: Recording: "%s", Descr error, Unexpected error',
+	'Recording: Recording: "%s", Could not get channel ID' : 'Recording: Recording: "%s", Could not get channel ID',
+	"(STILL RECORDING)"  : "(STILL RECORDING)",
+	"No server information entered." : "No server information entered.",
+	"Server port is not defined"     : "Server port is not defined",
+	"Server port is not numeric"     : "Server port is not numeric",
+	"Server %s:%s does not respond correctly - check the Server and Port settings in the Preferences" : "Server %s:%s does not respond correctly - check the Server and Port settings in the Preferences"
 }
