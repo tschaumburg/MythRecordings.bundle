@@ -118,7 +118,8 @@ TITLE_NOSPLITTERS = ["^CSI: New York"]
 
 CategoryAliases = \
 	[
-		[L("Serie"), "series", "serie"], ["Children", "kids"], 
+		[L("Serie"), "series", "serie"],
+		[L("Children"), "Children", "kids"], 
 		[L("Documentary"), "documentary", "educational"], 
 		[L("Uncategorized"), "Uncategorized", ""]
 	]
