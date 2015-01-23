@@ -12,7 +12,6 @@ import re
 ####################################################################################################
 NAME = "MythTV recordings"
 PVR_URL = 'http://%s:%s/' % (Prefs['server'],Prefs['port'])
-TITLE_SPLITTERS = ['-', ':']
 CACHE_TIME = int(Prefs['cacheTime'])
 SERIES_SUPPORT = True
 
@@ -52,13 +51,6 @@ UNKNOWN_SERIES_ICON = 'unknown-series-icon.png' # TODO: missing
 # So: whenever you add a literal XPATH expression in a call to GroupRecordingsBy, you may
 # want to add a human-readableform to the dictionary below.
 
-CategoryAliases = \
-	[
-		["series", "serie"], ["Children", "kids"], 
-		["documentary", "educational"], 
-		["Uncategorized", ""]
-	]
-
 ReadableKeyNames = \
     {
         "Recording/RecGroup": "Recording group",
@@ -72,6 +64,60 @@ def GetReadableKeyName(keyname):
     else:
         return keyname
 
+####################################################################################################
+# User configurable data:
+# =======================
+# This section contains configuration that a user may wish to configure according to taste and 
+# needs.
+# 
+# This really belongs in the user preferences. But since preferences only handle simple types
+# (bool, text,...), this proved unwieldy (editing a Python list-of-lists using a 4-button Roku
+# remote control is ... interesting).
+#
+# So for now, these settings go in here. If you have a better idea, let me know.
+####################################################################################################
+
+# Title splitting
+# ===============
+# Sometimes the episodes of a series will include the subtitle in the title, which means that
+# the episodes cannot be properly combined by title.
+#
+# For example, I may have recorded two episodes of the 2012 "Sherlock Holmes" season, with the
+# following metadata:
+#
+#    {Title = "Sherlock Holmes - A Scandal in Belgravia", Subtitle = "British series, 2012"}
+#    {Title = "Sherlock Holmes - The Hounds of Baskerville", Subtitle = "British series, 2012"}
+#
+# These do not match by title, and will not immediately be recognized as episodes of the same 
+# series.
+#
+# But if you add "-" to the title splitters list below, the metadata will be reorganized as 
+# follows:
+#
+#    {Title = "Sherlock Holmes", Subtitle = "A Scandal in Belgravia - British series, 2012"}
+#    {Title = "Sherlock Holmes", Subtitle = "The Hounds of Baskerville - British series, 2012"}
+#
+TITLE_SPLITTERS = ['-', ':']
+
+# Category aliases
+# ================
+# When grouping recordings by category, the category names are not always consistent -
+# often the category values deoend on the channel the recording was made from.
+# 
+# To avoid having the category list filled up with categories that only vary in spelling
+# or language, the CategoryAliases list-of-lists below is used.
+# 
+# CategoryAliases is a list of alias lists. Each alias list consists of the canonical 
+# name, followed by aliases.
+#
+# Whenever an alias value is met, it is reolaced with the corresponding canonical name.
+
+CategoryAliases = \
+	[
+		["series", "serie"], ["Children", "kids"], 
+		["documentary", "educational"], 
+		["Uncategorized", ""]
+	]
 
 
 
