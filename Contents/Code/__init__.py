@@ -10,7 +10,7 @@ import json
 import re
 
 ####################################################################################################
-NAME = "MythTV recordings"
+NAME = L("MythTV recordings")
 PVR_URL = 'http://%s:%s/' % (Prefs['server'],Prefs['port'])
 CACHE_TIME = int(Prefs['cacheTime'])
 SERIES_SUPPORT = True
@@ -53,9 +53,9 @@ UNKNOWN_SERIES_ICON = 'unknown-series-icon.png' # TODO: missing
 
 ReadableKeyNames = \
     {
-        "Recording/RecGroup": "Recording group",
-        "Channel/ChannelName": "Channel name",
-        "StartTime": "Recording date"
+        "Recording/RecGroup": L("Recording group"),
+        "Channel/ChannelName": L("Channel name"),
+        "StartTime": L("Recording date")
     }
 
 def GetReadableKeyName(keyname):
@@ -118,9 +118,9 @@ TITLE_NOSPLITTERS = ["^CSI: New York"]
 
 CategoryAliases = \
 	[
-		["series", "serie"], ["Children", "kids"], 
-		["documentary", "educational"], 
-		["Uncategorized", ""]
+		[L("Serie"), "series", "serie"], ["Children", "kids"], 
+		[L("Documentary"), "documentary", "educational"], 
+		[L("Uncategorized"), "Uncategorized", ""]
 	]
 
 
@@ -150,7 +150,7 @@ def MainMenu():
     dir.add(
         DirectoryObject(
             key=Callback(GroupRecordingsBy, groupByList=['Title'], staticBackground=BY_NAME_BACKGROUND), 
-            title='By title', 
+            title=L('By title'), 
             thumb=R(BY_NAME_ICON)
         )
     )
@@ -159,7 +159,7 @@ def MainMenu():
     dir.add(
         DirectoryObject(
             key=Callback(GroupRecordingsBy, groupByList=['Category', 'Title'], staticBackground=BY_CATEGORY_BACKGROUND), 
-            title='By category', 
+            title=L('By category'), 
             thumb=R(BY_CATEGORY_ICON)
         )
     )
@@ -170,7 +170,7 @@ def MainMenu():
         dir.add(
             DirectoryObject(
                 key=Callback(GroupRecordingsBy, groupByList=['Recording/RecGroup']), 
-                title='By recording group'
+                title=L('By recording group')
             )
         )
 
@@ -180,7 +180,7 @@ def MainMenu():
         dir.add(
             DirectoryObject(
                 key=Callback(GroupRecordingsBy, groupByList=['Channel/ChannelName']), 
-                title='By channel'
+                title=L('By channel')
             )
         )
 
@@ -188,7 +188,7 @@ def MainMenu():
     dir.add(
         DirectoryObject(
             key=Callback(GetRecordingList, sortKeyName='StartTime', staticBackground=BY_DATE_BACKGROUND), 
-            title='By recording date', 
+            title=L('By recording date'), 
             thumb=R(BY_DATE_ICON)
         )
     )
@@ -197,7 +197,7 @@ def MainMenu():
     dir.add(
         PrefsObject(
             title="Preferences", 
-            summary="Configure how to connect to the MythTV backend", 
+            summary=L("Configure how to connect to the MythTV backend"), 
             thumb=R("icon-prefs.png")
         )
     )
@@ -416,13 +416,13 @@ def InternalGetImage(inetref, staticBackground, fallback):
 def MakeTitle(filterBy, groupByKey):
     readableGroupByKey = GetReadableKeyName(groupByKey)
     if len(filterBy) == 0:
-        title = 'By %s' % readableGroupByKey
+        title = L('By %s') % readableGroupByKey
     else:
         title = ""
         for filterKeyName, filterKeyNameValue in filterBy.items():
             readableFilterKeyName = GetReadableKeyName(filterKeyName)
             title = title + ', %s "%s"' % (readableFilterKeyName, filterKeyNameValue)
-        title = title + ', by %s' % readableGroupByKey
+        title = title + ', ' + L('by %s') % readableGroupByKey
         title = title[2:] # remove starting ", "
     return title
 
@@ -471,20 +471,20 @@ def Recording(recording, seriesInetRef = None, staticBackground = None):
 	
 	# Mandatory properties: Title, Channel, StartTime, EndTime:
 	# =========================================================
-	showname = GetField(recording, 'Title') # recording.find('Title').text
+	showname = GetField(recording, 'Title')
 	chanId = recording.find('Channel').find('ChanId').text
-	programStart = GetField(recording, 'StartTime') # recording.find('StartTime').text
-	programEnd = GetField(recording, 'EndTime') # recording.find('EndTime').text
-	recordingStart = GetField(recording, 'Recording/StartTs') # recording.find('Recording/StartTs').text
-	recordingEnd = GetField(recording, 'Recording/EndTs') # recording.find('Recording/EndTs').text
+	programStart = GetField(recording, 'StartTime')
+	programEnd = GetField(recording, 'EndTime')
+	recordingStart = GetField(recording, 'Recording/StartTs')
+	recordingEnd = GetField(recording, 'Recording/EndTs')
 
 	shouldStart = datetime.datetime.strptime(programStart,"%Y-%m-%dT%H:%M:%SZ")
 	didStart = datetime.datetime.strptime(recordingStart,"%Y-%m-%dT%H:%M:%SZ")
 	shouldEnd = datetime.datetime.strptime(programEnd,"%Y-%m-%dT%H:%M:%SZ")
 	didEnd = datetime.datetime.strptime(recordingEnd,"%Y-%m-%dT%H:%M:%SZ")
 
-	fileName = GetField(recording, 'FileName') # recording.find('FileName').text
-	storageGroup = GetField(recording, 'Recording/StorageGroup') # recording.find('Recording/StorageGroup').text
+	fileName = GetField(recording, 'FileName')
+	storageGroup = GetField(recording, 'Recording/StorageGroup')
 
 	# Playback URL:
 	# =============
@@ -518,7 +518,7 @@ def Recording(recording, seriesInetRef = None, staticBackground = None):
 		epname = GetField(recording, 'SubTitle')
 		epname = "%s (%s)" % (epname, shouldStart.strftime('%Y-%m-%d'))
 	except:
-		Warning('Recording: Recording: "%s" had no SubTitle - using date' % showname)
+		Warning(L('Recording: Recording: "%s" had no SubTitle - using date') % showname)
 		epname = shouldStart.strftime('%Y-%m-%d')
 
 	#Log("EPNAME = %s" % epname)
@@ -540,7 +540,7 @@ def Recording(recording, seriesInetRef = None, staticBackground = None):
 			delta = shouldEnd - didStart + datetime.timedelta(hours=0, minutes=5,seconds=0)
 
 	except:
-		Warning('Recording: Recording: "%s", Duration error, Unexpected error' % showname)
+		Warning(L('Recording: Recording: "%s", Duration error, Unexpected error') % showname)
 		delta = datetime.timedelta(hours=3, minutes=0,seconds=0)
 
 	duration = str(int(delta.seconds * 1000))
@@ -559,27 +559,27 @@ def Recording(recording, seriesInetRef = None, staticBackground = None):
 			missedEnd = False
 
 		if (missedStart and missedEnd):
-			warning = 'WARNING: Recording may have missed both start and end of program (by %s and %s, respectively)\n' % (str(missedAtStart),str(missedAtEnd))
+			warning = L('WARNING: Recording may have missed both start and end of program (by %s and %s, respectively)\n') % (str(missedAtStart),str(missedAtEnd))
 		elif (missedStart):
-			warning = 'WARNING: Recording may have missed start of program by %s\n' % str(missedAtStart)
+			warning = L('WARNING: Recording may have missed start of program by %s\n') % str(missedAtStart)
 		elif (missedEnd):
-			warning = 'WARNING: Recording may have missed end of program by %s\n' % str(missedAtEnd)
+			warning = L('WARNING: Recording may have missed end of program by %s\n') % str(missedAtEnd)
 		else:
 			warning = ""
 
 		if stillRecording:
-			warning = 'STILL RECORDING\n' + warning
+			warning = L('STILL RECORDING') + '\n' + warning
 
 	except:
 
-		Warning('Recording: Recording: "%s", Duration error, Unexpected error' % showname)
+		Warning(L('Recording: Recording: "%s", Duration error, Unexpected error') % showname)
 		
 	# Description:
 	# ============
 	try:
 		descr = GetField(recording, 'Description').strip() #recording.find('Description').text.strip()
 	except:
-		Warning('Recording: Recording: "%s", Descr error, Unexpected error' % showname)
+		Warning(L('Recording: Recording: "%s", Descr error, Unexpected error') % showname)
 		descr = None
 
 
@@ -590,7 +590,7 @@ def Recording(recording, seriesInetRef = None, staticBackground = None):
 		if channel == '0':
 			channel = None
 	except:
-		Warning('Recording: Recording: "%s", Could not set channel ID' % showname)			
+		Warning(L('Recording: Recording: "%s", Could not get channel ID') % showname)			
 		channel = None
 	
 	# Title:
@@ -599,7 +599,7 @@ def Recording(recording, seriesInetRef = None, staticBackground = None):
 	if epname is None:
 		header = showname
 	if stillRecording:
-		header = header + " (STILL RECORDING)"
+		header = header + " " + L("(STILL RECORDING)")
 	#status = recording.find('Recording/Status').text
 	#header = "(" + status + ") " + header
 
@@ -849,14 +849,14 @@ def LoadAliases(aliasPrefName):
 def ValidatePrefs():
 	global PVR_URL
 	if Prefs['server'] is None:
-		return MessageContainer("Error", "No server information entered.")
+		return MessageContainer("Error", L("No server information entered."))
 	elif Prefs['port'] is None:
-		return MessageContainer("Error", "Server port is not defined")
+		return MessageContainer("Error", L("Server port is not defined"))
 	elif not Prefs['port'].isdigit():
-		return MessageContainer("Error", "Server port is not numeric")
+		return MessageContainer("Error", L("Server port is not numeric"))
 	else:
 		port = Prefs['port']
-		PVR_URL = 'http://%s:%s/' % (Prefs['server'],port)
+		PVR_URL = 'http://%s:%s/' % (Prefs['server'], port)
 		Log('ValidatePrefs: PVR URL = %s' % PVR_URL)
 		try:
 			testXML = GetMythTVRecordings({}, 1)
@@ -864,6 +864,6 @@ def ValidatePrefs():
 			#    <Version>0.25.20110928-1</Version>
 			# element for ver >= 0.27
 		except:
-			return MessageContainer("Error", "Server %s:%s does not respond correctly - check the Server and Port settings in the Preferences")
+			return MessageContainer("Error", L("Server %s:%s does not respond correctly - check the Server and Port settings in the Preferences") % (Prefs['server'], port))
 
 		return MessageContainer("Success","Success")
