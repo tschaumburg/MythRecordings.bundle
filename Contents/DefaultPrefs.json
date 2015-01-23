@@ -30,12 +30,6 @@
         "default": "false"
     },
     {
-        "id": "categoryAliases",
-        "label": "Specify categories that mean the same (do not change unless you know JSON notation!)",
-        "type": "text",
-        "default": "[[\"series\", \"serie\"], [\"Children\", \"kids\"], [\"documentary\", \"educational\"], [\"Uncategorized\", \"\"]]"
-    },
-    {
         "id": "respectMasterBackendOverride",
         "label": "Respect MythTVs Master Backend Override setting",
         "type": "bool",

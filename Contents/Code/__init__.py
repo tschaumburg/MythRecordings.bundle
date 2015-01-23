@@ -8,19 +8,28 @@ import datetime
 import urllib2
 import json
 import re
-####################################################################################################
-VIDEO_PREFIX = "/video/mythrecordings"
 
+####################################################################################################
 NAME = "MythTV recordings"
-ART  = 'item-default.png'
-BACKGROUND  = 'background-default.png'
-BY_NAME  = 'by-name.png'
-BY_DATE  = 'by-date.png'
-BY_CATEGORY  = 'by-category.png'
 PVR_URL = 'http://%s:%s/' % (Prefs['server'],Prefs['port'])
 TITLE_SPLITTERS = ['-', ':']
 CACHE_TIME = int(Prefs['cacheTime'])
 SERIES_SUPPORT = True
+
+MYTHTV_BACKGROUND = 'mythtv-background.png'
+MYTHTV_ICON = 'mythtv-icon.png'
+
+BY_NAME_ICON  = 'by-name-icon.png'
+BY_NAME_BACKGROUND  = 'by-name-background.png' # TODO: missing
+
+BY_DATE_ICON  = 'by-date-icon.png'
+BY_DATE_BACKGROUND  = 'by-date-background.png' # TODO: missing
+
+BY_CATEGORY_ICON  = 'by-category-icon.png'
+BY_CATEGORY_BACKGROUND  = 'by-category-background.png' # TODO: missing
+
+UNKNOWN_SERIES_BACKGROUND = 'unknown-series-background.png' # TODO: missing
+UNKNOWN_SERIES_ICON = 'unknown-series-icon.png' # TODO: missing
 
 
 ####################################################################################################
@@ -42,6 +51,13 @@ SERIES_SUPPORT = True
 #
 # So: whenever you add a literal XPATH expression in a call to GroupRecordingsBy, you may
 # want to add a human-readableform to the dictionary below.
+
+CategoryAliases = \
+	[
+		["series", "serie"], ["Children", "kids"], 
+		["documentary", "educational"], 
+		["Uncategorized", ""]
+	]
 
 ReadableKeyNames = \
     {
@@ -78,23 +94,23 @@ def Start():
 ####################################################################################################
 @handler('/video/mythrecordings','MythTV recordings')
 def MainMenu():
-    dir=ObjectContainer(art = R(BACKGROUND))
+    dir=ObjectContainer(art = R(MYTHTV_BACKGROUND))
 
     # By title:
     dir.add(
         DirectoryObject(
-            key=Callback(GroupRecordingsBy, groupByList=['Title']), 
+            key=Callback(GroupRecordingsBy, groupByList=['Title'], staticBackground=BY_NAME_BACKGROUND), 
             title='By title', 
-            thumb=R(BY_NAME)
+            thumb=R(BY_NAME_ICON)
         )
     )
     
     # By category, then by title:
     dir.add(
         DirectoryObject(
-            key=Callback(GroupRecordingsBy, groupByList=['Category', 'Title']), 
+            key=Callback(GroupRecordingsBy, groupByList=['Category', 'Title'], staticBackground=BY_CATEGORY_BACKGROUND), 
             title='By category', 
-            thumb=R(BY_CATEGORY)
+            thumb=R(BY_CATEGORY_ICON)
         )
     )
 
@@ -121,9 +137,9 @@ def MainMenu():
     # By recording date:
     dir.add(
         DirectoryObject(
-            key=Callback(GetRecordingList, sortKeyName='StartTime'), 
+            key=Callback(GetRecordingList, sortKeyName='StartTime', staticBackground=BY_DATE_BACKGROUND), 
             title='By recording date', 
-            thumb=R(BY_DATE)
+            thumb=R(BY_DATE_ICON)
         )
     )
 
@@ -219,6 +235,7 @@ def GroupRecordingsBy(groupByList = [], filterBy = {}, seriesInetRef = None, sta
 		
 		# Static background image for subdirectory entry:
 		subdirStaticBackground = '%s%s.png' % (backgroundPrefix, CamelCase(subdirName))
+		subdirStaticIcon = '%s%s.png' % (iconPrefix, CamelCase(subdirName))
 		
 		# Special case: see if this is the list of episodes in a series
 		subSeriesInetRef = None
@@ -226,7 +243,7 @@ def GroupRecordingsBy(groupByList = [], filterBy = {}, seriesInetRef = None, sta
 			subSeriesInetRef = GetInetref(subdirContents)
 
 		# Icon for subdirectory entry:		
-		iconUrl = GetSeriesIcon(subSeriesInetRef, subdirStaticBackground)
+		iconUrl = GetSeriesIcon(subSeriesInetRef, subdirStaticIcon)
 
 		if len(subdirContents) == 1 and groupByKey == "Title": 
                         # Experimental:
@@ -275,16 +292,27 @@ def GetInetref(recordings):
 	return None
 
 def GetSeriesIcon(inetref, staticBackground):
-	return GetSeriesBackground(inetref, staticBackground)
+	# We MUST have a fallback image:
+	if staticBackground is None:
+		staticBackground = UNKNOWN_SERIES_ICON
+
+	return InternalGetImage(inetref, staticBackground, UNKNOWN_SERIES_ICON)
 
 def GetSeriesBackground(inetref, staticBackground):
 	# We MUST have a fallback image:
 	if staticBackground is None:
-		staticBackground = BACKGROUND
+		staticBackground = UNKNOWN_SERIES_BACKGROUND
+
+	return InternalGetImage(inetref, staticBackground, UNKNOWN_SERIES_BACKGROUND)
+
+def InternalGetImage(inetref, staticBackground, fallback):
+	# We MUST have a fallback image:
+	if staticBackground is None:
+		staticBackground = MYTHTV_BACKGROUND
 
 	# If this is not defined as a series, return the static image:
 	if inetref is None:
-		return R(staticBackground)
+		return R2(staticBackground, fallback)
 
 	# OK, so it's a series - let's look for artwork:
 	url = "%sContent/GetRecordingArtwork?Inetref=%s&Type=fanart" % (PVR_URL, inetref)
@@ -293,7 +321,7 @@ def GetSeriesBackground(inetref, staticBackground):
 	try:
 		resourceVal = HTTP.Request(url, cacheTime = CACHE_TIME).content
 	except:
-		return R(staticBackground)
+		return R2(staticBackground, fallback)
 
 	# If no artwork is defined on the MythTV server, an XML error message
 	# is returned instead of an image.
@@ -310,8 +338,23 @@ def GetSeriesBackground(inetref, staticBackground):
 		return url
 
 	# We shouldn't ever get here, but to be on the safe side:
-	return R(staticBackground)
+	return R2(staticBackground, fallback)
 
+def R2(resource, fallback):
+	return Callback(MakeImage2, resource=resource, fallback=fallback)
+
+@route('/video/mythrecordings/MakeImage2') 
+def MakeImage2(resource, fallback):
+	try: 
+		data = Resource.Load(resource) #HTTP.Request(R(resource), cacheTime = CACHE_1MONTH).content 
+		if not data:
+			Log("IMAGE: %s doesn't exist - falling back to %s" % (R(resource), fallback))
+			return Redirect(R(fallback)) #Redirect(R(fallback))
+		Log("IMAGE: returning %s" % resource)
+		return Redirect(R(resource)) #DataObject(data, 'image/jpeg') 
+	except:
+		Log("IMAGE: %s doesn't exist - falling back to %s" % (R(resource), fallback))
+		return Redirect(R(fallback)) #Redirect(R(fallback))
 
 ####################################################################################################
 # Title handling:
@@ -513,7 +556,7 @@ def Recording(recording, seriesInetRef = None, staticBackground = None):
 	if not channel is None and not recordingStart is None:
 		thumb = PVR_URL + '/Content/GetPreviewImage?ChanId=%s&StartTime=%s' % (channel, recordingStart,)
 	else:
-		thumb = R(ART)
+		thumb = R(MYTHTV_ICON)
 
 	# Background image:
 	# =================
@@ -581,8 +624,10 @@ def RecordingInfo(chanId, startTime, seriesInetRef):
 #    list of recording (the structure of a recording is irrelevant - use GetField to
 #                       retrieve the value of a field)
 ####################################################################################################
-def GetMythTVRecordings(filterBy):
+def GetMythTVRecordings(filterBy, maxCount=None):
 	url = PVR_URL + 'Dvr/GetRecordedList'
+	if not maxCount is None:
+		url = url + "?Count=" + maxCount
 	xmlstring = HTTP.Request(url, cacheTime = CACHE_TIME).content
 	root = ET.fromstring(xmlstring)
 	
@@ -639,7 +684,7 @@ def GetField(recording, fieldName):
 		title = recording.find('Title').text
 
 		# If subtitle is empty, we try splitting the title:
-		if subtitle is None or subtitle == "":
+		if subtitle is None or subtitle == "":# or "" == "":
 			for splitter in TITLE_SPLITTERS:
 				splitResult = title.split(splitter, 1)
 				if len(splitResult) == 2:
@@ -718,15 +763,25 @@ def LoadAliases(aliasPrefName):
 		return []
 	if aliasPrefName == "":
 		return []
-	keyAliasString = Prefs[aliasPrefName]
-	try:
-		#Log('keyAliasString = %s', keyAliasString)
-		keyAliases = json.loads(keyAliasString)
-		#Log('keyAliases = %s', keyAliases)
-	except:
-		keyAliases = [] # no aliases, then
 
-	return keyAliases
+	# Workaround:
+	# =========== 
+	# It is really difficult to edit a list-of-lists in the preferences editor
+	# - so we're moving the aliases to hardcoded variables for now:
+	if aliasPrefName == "categoryAliases":
+		return CategoryAliases
+
+	return []
+	
+	#keyAliasString = Prefs[aliasPrefName]
+	#try:
+	#	#Log('keyAliasString = %s', keyAliasString)
+	#	keyAliases = json.loads(keyAliasString)
+	#	#Log('keyAliases = %s', keyAliases)
+	#except:
+	#	keyAliases = [] # no aliases, then
+
+	#return keyAliases
 
 
 #####################################################################################################
@@ -742,4 +797,12 @@ def ValidatePrefs():
 		port = Prefs['port']
 		PVR_URL = 'http://%s:%s/' % (Prefs['server'],port)
 		Log('ValidatePrefs: PVR URL = %s' % PVR_URL)
+		try:
+			testXML = GetMythTVRecordings({}, 1)
+			# Should we test the 
+			#    <Version>0.25.20110928-1</Version>
+			# element for ver >= 0.27
+		except:
+			return MessageContainer("Error", "Server %s:%s does not respond correctly - check the Server and Port settings in the Preferences")
+
 		return MessageContainer("Success","Success")
