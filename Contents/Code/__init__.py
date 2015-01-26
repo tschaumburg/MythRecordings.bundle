@@ -9,8 +9,14 @@ import urllib2
 import json
 import re
 
+def L2(key):
+	return str(L(key))
+
+def F2(key, *args):
+	return str(F(key, *args))
+
 ####################################################################################################
-NAME = L("MythTV recordings")
+NAME = L2("TITLE")
 PVR_URL = 'http://%s:%s/' % (Prefs['server'],Prefs['port'])
 CACHE_TIME = int(Prefs['cacheTime'])
 SERIES_SUPPORT = True
@@ -53,9 +59,9 @@ UNKNOWN_SERIES_ICON = 'unknown-series-icon.png' # TODO: missing
 
 ReadableKeyNames = \
     {
-        "Recording/RecGroup": L("Recording group"),
-        "Channel/ChannelName": L("Channel name"),
-        "StartTime": L("Recording date")
+        "Recording/RecGroup": L2("RECORDING_GROUP"),
+        "Channel/ChannelName": L2("CHANNEL_NAME"),
+        "StartTime": L2("RECORDING_DATE")
     }
 
 def GetReadableKeyName(keyname):
@@ -118,10 +124,10 @@ TITLE_NOSPLITTERS = ["^CSI: New York"]
 
 CategoryAliases = \
 	[
-		[L("Serie"), "series", "serie"],
-		[L("Children"), "Children", "kids"], 
-		[L("Documentary"), "documentary", "educational"], 
-		[L("Uncategorized"), "Uncategorized", ""]
+		[str(L2("SERIES")), "series", "serie"],
+		[str(L2("CHILDREN")), "Children", "kids"], 
+		[str(L2("DOCUMENTARY")), "documentary", "educational"], 
+		[str(L2("UNCATEGORIZED")), "Uncategorized", ""]
 	]
 
 
@@ -151,7 +157,7 @@ def MainMenu():
     dir.add(
         DirectoryObject(
             key=Callback(GroupRecordingsBy, groupByList=['Title'], staticBackground=BY_NAME_BACKGROUND), 
-            title=L('By title'), 
+            title=L2('BY_TITLE'), 
             thumb=R(BY_NAME_ICON)
         )
     )
@@ -160,7 +166,7 @@ def MainMenu():
     dir.add(
         DirectoryObject(
             key=Callback(GroupRecordingsBy, groupByList=['Category', 'Title'], staticBackground=BY_CATEGORY_BACKGROUND), 
-            title=L('By category'), 
+            title=L2('BY_CATEGORY'), 
             thumb=R(BY_CATEGORY_ICON)
         )
     )
@@ -171,7 +177,7 @@ def MainMenu():
         dir.add(
             DirectoryObject(
                 key=Callback(GroupRecordingsBy, groupByList=['Recording/RecGroup']), 
-                title=L('By recording group')
+                title=L2('BY_RECORDING_GROUP')
             )
         )
 
@@ -181,7 +187,7 @@ def MainMenu():
         dir.add(
             DirectoryObject(
                 key=Callback(GroupRecordingsBy, groupByList=['Channel/ChannelName']), 
-                title=L('By channel')
+                title=L2('BY_CHANNEL')
             )
         )
 
@@ -189,7 +195,7 @@ def MainMenu():
     dir.add(
         DirectoryObject(
             key=Callback(GetRecordingList, sortKeyName='StartTime', staticBackground=BY_DATE_BACKGROUND), 
-            title=L('By recording date'), 
+            title=L2('BY_RECORDING_DATE'), 
             thumb=R(BY_DATE_ICON)
         )
     )
@@ -197,8 +203,8 @@ def MainMenu():
     # Preferences:
     dir.add(
         PrefsObject(
-            title="Preferences", 
-            summary=L("Configure how to connect to the MythTV backend"), 
+            title=L2("PREFERENCES"), 
+            summary=L2("PREFERENCES_SUMMARY"), 
             thumb=R("icon-prefs.png")
         )
     )
@@ -303,7 +309,7 @@ def GroupRecordingsBy(groupByList = [], filterBy = {}, seriesInetRef = None, sta
                         # single entry, we'll save the extra level and just put the
                         # recording in.
 			recording = subdirContents[0]
-			oc.add(Recording(recording, subSeriesInetRef))
+			oc.add(Recording(recording, seriesInetRef=subSeriesInetRef))
 		else:
                         # Otherwise, we'll play it straight and put in a DirectoryObject
                         # referencing the next level down
@@ -347,67 +353,79 @@ def GetSeriesIcon(inetref, staticBackground):
 	if staticBackground is None:
 		staticBackground = UNKNOWN_SERIES_ICON
 
-	return InternalGetImage(inetref, staticBackground, UNKNOWN_SERIES_ICON)
+	result = InternalGetImage(inetref, staticBackground, UNKNOWN_SERIES_ICON)
+	Log("ICON: %s" % result)
+	return result
 
 def GetSeriesBackground(inetref, staticBackground):
 	# We MUST have a fallback image:
 	if staticBackground is None:
 		staticBackground = UNKNOWN_SERIES_BACKGROUND
 
-	return InternalGetImage(inetref, staticBackground, UNKNOWN_SERIES_BACKGROUND)
+	result = InternalGetImage(inetref, staticBackground, UNKNOWN_SERIES_BACKGROUND)
+	Log("BACKGROUND: %s" % result)
+	return result
 
 def InternalGetImage(inetref, staticBackground, fallback):
+	Log("InternalGetImage:")
+	Log("   1: %s" % inetref)
+	Log("   2: %s" % staticBackground)
+	Log("   3: %s" % fallback)
 	# We MUST have a fallback image:
-	if staticBackground is None:
-		staticBackground = MYTHTV_BACKGROUND
+	#if staticBackground is None:
+	#	staticBackground = MYTHTV_BACKGROUND
 
 	# If this is not defined as a series, return the static image:
 	if inetref is None:
+		#Log("InternalGetImage:")
+		#Log("   1: %s" % staticBackground)
+		#Log("   2: %s" % fallback)
 		return R2(staticBackground, fallback)
+		#return Resource.ContentsOfURLWithFallback(url = R(staticBackground), fallback = fallback)
 
 	# OK, so it's a series - let's look for artwork:
 	url = "%sContent/GetRecordingArtwork?Inetref=%s&Type=fanart" % (PVR_URL, inetref)
 
-	return Resource.ContentsOfURLWithFallback(url = [url, staticBackground, fallback])
+	#return Resource.ContentsOfURLWithFallback(url = [url, staticBackground], fallback = fallback)
+	#return Resource.ContentsOfURLWithFallback(url = url, fallback = staticBackground)
 	
-	# # Test if URL responds - otherwise fall back to static background:
-	# try:
-	# 	resourceVal = HTTP.Request(url, cacheTime = CACHE_TIME).content
-	# except:
-	# 	return R2(staticBackground, fallback)
+	# Test if URL responds - otherwise fall back to static background:
+	try:
+		resourceVal = HTTP.Request(url, cacheTime = CACHE_TIME).content
+	except:
+		return R2(staticBackground, fallback)
+		#return Resource.ContentsOfURLWithFallback(url = R(staticBackground), fallback = fallback)
 
-	# # If no artwork is defined on the MythTV server, an XML error message
-	# # is returned instead of an image.
-	# try:
-	# 	# To detect this, we try to parse the returned data as XML - which
-	# 	# will fail if it's a proper image:
-	# 	detail = ET.fromstring(resourceVal)
-	# 
-	# 	# if we get here, the URL returned a "no artwork defined" error:
-	# 	return R(staticBackground) 
-	# except:
-	# 	# If parsing as XML failed, we'll assume it's binary image data,
-	# 	# and everything is OK:
-	# 	return url
-	# 
+	# If no artwork is defined on the MythTV server, an XML error message
+	# is returned instead of an image.
+	try:
+		# To detect this, we try to parse the returned data as XML - which
+		# will fail if it's a proper image:
+		detail = ET.fromstring(resourceVal)
+	except:
+		# If parsing as XML failed, we'll assume it's binary image data,
+		# and everything is OK:
+		return url
+	
 	# We shouldn't ever get here, but to be on the safe side:
-	# return R2(staticBackground, fallback)
+	return R2(staticBackground, fallback)
+	#return Resource.ContentsOfURLWithFallback(url = R(staticBackground), fallback = fallback)
+	
+def R2(resource, fallback):
+	return Callback(MakeImage2, resource=resource, fallback=fallback)
 
-# def R2(resource, fallback):
-# 	return Callback(MakeImage2, resource=resource, fallback=fallback)
-
-# @route('/video/mythrecordings/MakeImage2') 
-# def MakeImage2(resource, fallback):
-# 	try: 
-# 		data = Resource.Load(resource) #HTTP.Request(R(resource), cacheTime = CACHE_1MONTH).content 
-# 		if not data:
-# 			Log("IMAGE: %s doesn't exist - falling back to %s" % (R(resource), fallback))
-# 			return Redirect(R(fallback)) #Redirect(R(fallback))
-# 		Log("IMAGE: returning %s" % resource)
-# 		return Redirect(R(resource)) #DataObject(data, 'image/jpeg') 
-# 	except:
-# 		Log("IMAGE: %s doesn't exist - falling back to %s" % (R(resource), fallback))
-# 		return Redirect(R(fallback)) #Redirect(R(fallback))
+@route('/video/mythrecordings/MakeImage2') 
+def MakeImage2(resource, fallback):
+	try: 
+		data = Resource.Load(resource) #HTTP.Request(R(resource), cacheTime = CACHE_1MONTH).content 
+		if not data:
+			Log("IMAGE: %s doesn't exist - falling back to %s" % (R(resource), fallback))
+			return Redirect(R(fallback)) #Redirect(R(fallback))
+		Log("IMAGE: returning %s" % resource)
+		return Redirect(R(resource)) #DataObject(data, 'image/jpeg') 
+	except:
+		Log("IMAGE: %s doesn't exist - falling back to %s" % (R(resource), fallback))
+ 		return Redirect(R(fallback)) #Redirect(R(fallback))
 
 ####################################################################################################
 # Title handling:
@@ -417,13 +435,13 @@ def InternalGetImage(inetref, staticBackground, fallback):
 def MakeTitle(filterBy, groupByKey):
     readableGroupByKey = GetReadableKeyName(groupByKey)
     if len(filterBy) == 0:
-        title = L('By %s') % readableGroupByKey
+        title = F("BY1", readableGroupByKey)
     else:
         title = ""
         for filterKeyName, filterKeyNameValue in filterBy.items():
             readableFilterKeyName = GetReadableKeyName(filterKeyName)
             title = title + ', %s "%s"' % (readableFilterKeyName, filterKeyNameValue)
-        title = title + ', ' + L('by %s') % readableGroupByKey
+        title = title + ', ' + F2("BY2", readableGroupByKey)
         title = title[2:] # remove starting ", "
     return title
 
@@ -459,7 +477,7 @@ def GetRecordingList(filterBy = {}, sortKeyName = None, sortReverse = True, seri
 		recordings.sort(key=lambda rec: rec.find(sortKeyName).text, reverse=sortReverse)
 	
 	for recording in recordings:
-		recordingEntry = Recording(recording, seriesInetRef)
+		recordingEntry = Recording(recording, seriesInetRef = seriesInetRef)
 		oc.add(recordingEntry)
 			
 	return oc
@@ -519,7 +537,7 @@ def Recording(recording, seriesInetRef = None, staticBackground = None):
 		epname = GetField(recording, 'SubTitle')
 		epname = "%s (%s)" % (epname, shouldStart.strftime('%Y-%m-%d'))
 	except:
-		Warning(L('Recording: Recording: "%s" had no SubTitle - using date') % showname)
+		Warning('Recording: Recording: "%s" had no SubTitle - using date' % showname)
 		epname = shouldStart.strftime('%Y-%m-%d')
 
 	#Log("EPNAME = %s" % epname)
@@ -541,7 +559,7 @@ def Recording(recording, seriesInetRef = None, staticBackground = None):
 			delta = shouldEnd - didStart + datetime.timedelta(hours=0, minutes=5,seconds=0)
 
 	except:
-		Warning(L('Recording: Recording: "%s", Duration error, Unexpected error') % showname)
+		Warning('Recording: Recording: "%s", Duration error, Unexpected error' % showname)
 		delta = datetime.timedelta(hours=3, minutes=0,seconds=0)
 
 	duration = str(int(delta.seconds * 1000))
@@ -560,27 +578,27 @@ def Recording(recording, seriesInetRef = None, staticBackground = None):
 			missedEnd = False
 
 		if (missedStart and missedEnd):
-			warning = L('WARNING: Recording may have missed both start and end of program (by %s and %s, respectively)\n') % (str(missedAtStart),str(missedAtEnd))
+			warning = F("ERROR_MISSED_BOTH", str(missedAtStart),str(missedAtEnd)) + "\n"
 		elif (missedStart):
-			warning = L('WARNING: Recording may have missed start of program by %s\n') % str(missedAtStart)
+			warning = F("ERROR_MISSED_START", str(missedAtStart)) + "\n"
 		elif (missedEnd):
-			warning = L('WARNING: Recording may have missed end of program by %s\n') % str(missedAtEnd)
+			warning = F("ERROR_MISSED_END", str(missedAtEnd)) + "\n"
 		else:
 			warning = ""
 
 		if stillRecording:
-			warning = L('STILL RECORDING') + '\n' + warning
+			warning = L("STATUS_STILL_RECORDING") + '\n' + warning
 
 	except:
 
-		Warning(L('Recording: Recording: "%s", Duration error, Unexpected error') % showname)
+		Warning('Recording: Recording: "%s", Duration error, Unexpected error' % showname)
 		
 	# Description:
 	# ============
 	try:
 		descr = GetField(recording, 'Description').strip() #recording.find('Description').text.strip()
 	except:
-		Warning(L('Recording: Recording: "%s", Descr error, Unexpected error') % showname)
+		Warning('Recording: Recording: "%s", Descr error, Unexpected error' % showname)
 		descr = None
 
 
@@ -591,7 +609,7 @@ def Recording(recording, seriesInetRef = None, staticBackground = None):
 		if channel == '0':
 			channel = None
 	except:
-		Warning(L('Recording: Recording: "%s", Could not get channel ID') % showname)			
+		Warning('Recording: Recording: "%s", Could not get channel ID' % showname)			
 		channel = None
 	
 	# Title:
@@ -600,7 +618,7 @@ def Recording(recording, seriesInetRef = None, staticBackground = None):
 	if epname is None:
 		header = showname
 	if stillRecording:
-		header = header + " " + L("(STILL RECORDING)")
+		header = header + " (" + L("STATUS_STILL_RECORDING_2") + ")"
 	#status = recording.find('Recording/Status').text
 	#header = "(" + status + ") " + header
 
@@ -608,12 +626,14 @@ def Recording(recording, seriesInetRef = None, staticBackground = None):
 	# ===========
 	if not channel is None and not recordingStart is None:
 		thumb = PVR_URL + '/Content/GetPreviewImage?ChanId=%s&StartTime=%s' % (channel, recordingStart,)
+		backgroundUrl = PVR_URL + '/Content/GetPreviewImage?ChanId=%s&StartTime=%s' % (channel, recordingStart,)
 	else:
 		thumb = R(MYTHTV_ICON)
+		backgroundUrl = R(MYTHTV_BACKGROUND)
 
 	# Background image:
 	# =================
-	backgroundUrl = GetSeriesBackground(seriesInetRef, staticBackground)
+	#backgroundUrl = GetSeriesBackground(seriesInetRef, staticBackground)
 
 	Log("ICON(%s) => %s" % (header, thumb))
 	return VideoClipObject(
@@ -850,11 +870,11 @@ def LoadAliases(aliasPrefName):
 def ValidatePrefs():
 	global PVR_URL
 	if Prefs['server'] is None:
-		return MessageContainer("Error", L("No server information entered."))
+		return MessageContainer("Error", L("ERROR_MISSING_SERVER_INFO"))
 	elif Prefs['port'] is None:
-		return MessageContainer("Error", L("Server port is not defined"))
+		return MessageContainer("Error", L("ERROR_MISSING_SERVER_PORT"))
 	elif not Prefs['port'].isdigit():
-		return MessageContainer("Error", L("Server port is not numeric"))
+		return MessageContainer("Error", L("ERROR_SERVER_PORT_NON_NUMERIC"))
 	else:
 		port = Prefs['port']
 		PVR_URL = 'http://%s:%s/' % (Prefs['server'], port)
@@ -865,6 +885,6 @@ def ValidatePrefs():
 			#    <Version>0.25.20110928-1</Version>
 			# element for ver >= 0.27
 		except:
-			return MessageContainer("Error", L("Server %s:%s does not respond correctly - check the Server and Port settings in the Preferences") % (Prefs['server'], port))
+			return MessageContainer("Error", F("MYTHSERVER_UNAVAILABLE", "a", "b"))#(Prefs['server'], port))
 
 		return MessageContainer("Success","Success")
