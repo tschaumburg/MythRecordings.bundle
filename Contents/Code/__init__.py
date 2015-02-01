@@ -10,16 +10,18 @@ import json
 import re
 
 def L2(key):
-	return str(L(key))
+	result = str(L(key))
+	Log("L2: %s => %s" % (key, result))
+	return result
 
 def F2(key, *args):
 	return str(F(key, *args))
 
 ####################################################################################################
-NAME = L2("TITLE")
+NAME = "PLUGIN_TITLE"
 PVR_URL = 'http://%s:%s/' % (Prefs['server'],Prefs['port'])
 CACHE_TIME = int(Prefs['cacheTime'])
-SERIES_SUPPORT = True
+SERIES_SUPPORT = bool(Prefs['enableSeriesSupport'])
 
 MYTHTV_BACKGROUND = 'mythtv-background.png'
 MYTHTV_ICON = 'mythtv-icon.png'
@@ -59,9 +61,11 @@ UNKNOWN_SERIES_ICON = 'unknown-series-icon.png' # TODO: missing
 
 ReadableKeyNames = \
     {
-        "Recording/RecGroup": L2("RECORDING_GROUP"),
-        "Channel/ChannelName": L2("CHANNEL_NAME"),
-        "StartTime": L2("RECORDING_DATE")
+        "Recording/RecGroup": "RECORDING GROUP",
+        "Channel/ChannelName": "CHANNEL NAME",
+        "StartTime": "RECORDING DATE",
+	"Category": "CATEGORY",
+	"Title" : "TITLE"
     }
 
 def GetReadableKeyName(keyname):
@@ -107,7 +111,7 @@ def GetReadableKeyName(keyname):
 # titles are protected by adding a regular expression to the TITLE_NOSPLITTERS collection
 #
 TITLE_SPLITTERS = ['-', ':']
-TITLE_NOSPLITTERS = ["^CSI: New York"]
+TITLE_NOSPLITTERS = ["^CSI: New York"] # Regular expression matching
 
 # Category aliases
 # ================
@@ -124,10 +128,13 @@ TITLE_NOSPLITTERS = ["^CSI: New York"]
 
 CategoryAliases = \
 	[
-		[str(L2("SERIES")), "series", "serie"],
-		[str(L2("CHILDREN")), "Children", "kids"], 
-		[str(L2("DOCUMENTARY")), "documentary", "educational"], 
-		[str(L2("UNCATEGORIZED")), "Uncategorized", ""]
+		["SERIES", "Series", "series", "serie"],
+		["CHILDREN", "Children", "kids"], 
+		["DOCUMENTARY", "documentary", "educational"], 
+		["ENTERTAINMENT", "Entertainment", "entertainment"], 
+		["MOVIES", "Movie", "movie", "film", "Film", "drama", "Drama"], 
+		["SPORT", "Sport", "sport", "Football", "football", "Fodbold", "fodbold"], 
+		["UNCATEGORIZED", "Uncategorized", "", "Ukategoriseret"]
 	]
 
 
@@ -136,8 +143,8 @@ CategoryAliases = \
 
 def Start():
     
-	ObjectContainer.title1 = NAME
-	Log('%s Started' % NAME)
+	ObjectContainer.title1 = L2(NAME)
+	Log('%s Started' % L2(NAME))
 	Log('URL set to %s' % PVR_URL)
 	ValidatePrefs()
 
@@ -268,7 +275,7 @@ def GroupRecordingsBy(groupByList = [], filterBy = {}, seriesInetRef = None, sta
 	# Find a background image:
 	backgroundUrl = GetSeriesBackground(seriesInetRef, staticBackground)
 
-	oc = ObjectContainer(title2=title, art=backgroundUrl) # title1 is not displayed (on most clients, anyway)
+	oc = ObjectContainer(title2=str(title), art=backgroundUrl) # title1 is not displayed (on most clients, anyway)
 	
 	# Get the recordings metadata from the MythTV backend:
 	recordings = GetMythTVRecordings(filterBy)
@@ -288,7 +295,7 @@ def GroupRecordingsBy(groupByList = [], filterBy = {}, seriesInetRef = None, sta
                 subdirFilterBy[groupByKey] = subdirName
 
 		subdirContents = entries[subdirName]
-		entryTitle = "%s (%s)" % (subdirName, len(subdirContents))
+		entryTitle = "%s (%s)" % (L2(subdirName), len(subdirContents))
 		
 		# Static background image for subdirectory entry:
 		subdirStaticBackground = '%s%s.png' % (backgroundPrefix, CamelCase(subdirName))
@@ -313,6 +320,7 @@ def GroupRecordingsBy(groupByList = [], filterBy = {}, seriesInetRef = None, sta
 		else:
                         # Otherwise, we'll play it straight and put in a DirectoryObject
                         # referencing the next level down
+			Log("GROUP ICON(%s) => %s" % (entryTitle, iconUrl))
 			oc.add(
                             DirectoryObject(
                                 key=
@@ -323,14 +331,13 @@ def GroupRecordingsBy(groupByList = [], filterBy = {}, seriesInetRef = None, sta
                                         seriesInetRef=subSeriesInetRef,
 					staticBackground = subdirStaticBackground
                                     ), 
-                                title=entryTitle, 
+                                title=str(entryTitle).decode(), 
                                 thumb=iconUrl
                             )
                         )
 		
 	oc.objects.sort(key=lambda obj: obj.title)
 	return oc
-
 
 ####################################################################################################
 # Series meta-data:
@@ -349,6 +356,7 @@ def GetInetref(recordings):
 	return None
 
 def GetSeriesIcon(inetref, staticBackground):
+	#staticBackground = None
 	# We MUST have a fallback image:
 	if staticBackground is None:
 		staticBackground = UNKNOWN_SERIES_ICON
@@ -367,6 +375,7 @@ def GetSeriesBackground(inetref, staticBackground):
 	return result
 
 def InternalGetImage(inetref, staticBackground, fallback):
+	#staticBackground = MYTHTV_ICON
 	Log("InternalGetImage:")
 	Log("   1: %s" % inetref)
 	Log("   2: %s" % staticBackground)
@@ -433,22 +442,27 @@ def MakeImage2(resource, fallback):
 ####################################################################################################
 
 def MakeTitle(filterBy, groupByKey):
-    readableGroupByKey = GetReadableKeyName(groupByKey)
+    readableGroupByKey = L2(GetReadableKeyName(groupByKey))
     if len(filterBy) == 0:
-        title = F("BY1", readableGroupByKey)
+        title = F2("BY1", first_lower(readableGroupByKey))
     else:
         title = ""
         for filterKeyName, filterKeyNameValue in filterBy.items():
-            readableFilterKeyName = GetReadableKeyName(filterKeyName)
-            title = title + ', %s "%s"' % (readableFilterKeyName, filterKeyNameValue)
-        title = title + ', ' + F2("BY2", readableGroupByKey)
+            readableFilterKeyName = L2(GetReadableKeyName(filterKeyName))
+            title = title + ', %s "%s"' % (readableFilterKeyName, L2(filterKeyNameValue))
+        title = title + ', ' + F2("BY2", first_lower(readableGroupByKey))
         title = title[2:] # remove starting ", "
-    return title
+    return str(title) #.replace('æ', 'a')
 
 def CamelCase(src):
     result = re.sub(r'\W+', '', src.title())
     return result
 
+def first_lower(s):
+   if len(s) == 0:
+      return s
+   else:
+      return s[0].lower() + s[1:]
 
 ####################################################################################################
 # GetRecordingList:
@@ -578,16 +592,16 @@ def Recording(recording, seriesInetRef = None, staticBackground = None):
 			missedEnd = False
 
 		if (missedStart and missedEnd):
-			warning = F("ERROR_MISSED_BOTH", str(missedAtStart),str(missedAtEnd)) + "\n"
+			warning = F2("ERROR_MISSED_BOTH", str(missedAtStart),str(missedAtEnd)) + "\n"
 		elif (missedStart):
-			warning = F("ERROR_MISSED_START", str(missedAtStart)) + "\n"
+			warning = F2("ERROR_MISSED_START", str(missedAtStart)) + "\n"
 		elif (missedEnd):
-			warning = F("ERROR_MISSED_END", str(missedAtEnd)) + "\n"
+			warning = F2("ERROR_MISSED_END", str(missedAtEnd)) + "\n"
 		else:
 			warning = ""
 
 		if stillRecording:
-			warning = L("STATUS_STILL_RECORDING") + '\n' + warning
+			warning = L2("STATUS_STILL_RECORDING") + '\n' + warning
 
 	except:
 
@@ -618,7 +632,7 @@ def Recording(recording, seriesInetRef = None, staticBackground = None):
 	if epname is None:
 		header = showname
 	if stillRecording:
-		header = header + " (" + L("STATUS_STILL_RECORDING_2") + ")"
+		header = header + " (" + L2("STATUS_STILL_RECORDING_2") + ")"
 	#status = recording.find('Recording/Status').text
 	#header = "(" + status + ") " + header
 
@@ -637,8 +651,8 @@ def Recording(recording, seriesInetRef = None, staticBackground = None):
 
 	Log("ICON(%s) => %s" % (header, thumb))
 	return VideoClipObject(
-                title = header,
-                summary = str(warning) + str(descr),
+                title = str(header),
+                summary = str(warning + str(descr)),
                 originally_available_at = shouldStart,
                 thumb = thumb,
 		art = backgroundUrl,
@@ -670,7 +684,7 @@ def Recording(recording, seriesInetRef = None, staticBackground = None):
 #    ObjectContainer
 ####################################################################################################
 @route('/video/mythrecordings/GetRecordingInfo', allow_sync=True)
-def RecordingInfo(chanId, startTime, seriesInetRef):
+def RecordingInfo(chanId, startTime, seriesInetRef = None):
 	url = PVR_URL + 'Dvr/GetRecorded?StartTime=%s&ChanId=%s' % (startTime, chanId)
 	request = urllib2.Request(url, headers={"Accept" : "application/xml"})
 	#Log('RecordingInfo(chanId="%s", startTime="%s" seriesInetRef="%s"): opening %s' % (chanId, startTime, seriesInetRef, url))
@@ -698,16 +712,7 @@ def RecordingInfo(chanId, startTime, seriesInetRef):
 #                       retrieve the value of a field)
 ####################################################################################################
 def GetMythTVRecordings(filterBy, maxCount=None):
-	url = PVR_URL + 'Dvr/GetRecordedList'
-	if not maxCount is None:
-		url = url + "?Count=" + maxCount
-	xmlstring = HTTP.Request(url, cacheTime = CACHE_TIME).content
-	root = ET.fromstring(xmlstring)
-	
-	#request = urllib2.Request(url, headers={"Accept" : "application/xml"})
-	#u = urllib2.urlopen(request)
-	#tree = ET.parse(u)
-	#root = tree.getroot()
+	root = InternalGetRecordedList(maxCount)
 	
 	# Loop through recordings, filtering as specified:
 	recordings = root.findall('Programs/Program')
@@ -719,8 +724,6 @@ def GetMythTVRecordings(filterBy, maxCount=None):
 			continue
 		if recording.find('FileSize').text == '0':
 			continue
-		#if recording.find('Recording/Status').text == '3':
-		#	continue
 		if recording.find('Title').text == 'Unknown':
 			continue
 		if not Match(filterBy, recording):
@@ -729,6 +732,15 @@ def GetMythTVRecordings(filterBy, maxCount=None):
 		result.append(recording)
 
 	return result
+
+def InternalGetRecordedList(maxCount=None):
+	url = PVR_URL + 'Dvr/GetRecordedList'
+	if not maxCount is None:
+		url = url + "?Count=" + str(maxCount)
+	xmlstring = HTTP.Request(url, cacheTime = CACHE_TIME).content
+	root = ET.fromstring(xmlstring)
+	
+	return root
 
 def Match(filterBy, recording):
 	for filterKeyName, filterKeyValue in filterBy.items():
@@ -754,7 +766,12 @@ def Match(filterBy, recording):
 def GetField(recording, fieldName):
 	if fieldName == "Title" or fieldName == "SubTitle":
 		subtitle = recording.find('SubTitle').text
+		if not subtitle is None:
+			subtitle = subtitle.decode()
+
 		title = recording.find('Title').text
+		if not title is None:
+			title = title.decode()
 		
 		dontSplit = False
 		for nosplitter in TITLE_NOSPLITTERS:
@@ -772,7 +789,6 @@ def GetField(recording, fieldName):
 					newsubtitle = newsubtitle.strip()
 					if subtitle:
 						subtitle = newsubtitle + " - " + subtitle
-					#Log('Split title "%s" into ("%s", "%s")' % (orgTitle, title, subtitle))
 					break
 
 		if fieldName == "Title":
@@ -783,9 +799,15 @@ def GetField(recording, fieldName):
 	if fieldName == "Category":
 		keyAliases = LoadAliases('categoryAliases')
 		orgKeyValue = recording.find(fieldName).text
+		if not orgKeyValue is None:
+			orgKeyValue = orgKeyValue.decode()
 		return MapAliases(orgKeyValue, keyAliases)
 
-	return recording.find(fieldName).text
+	result = recording.find(fieldName).text
+	if not result is None:
+		result = result.decode()
+
+	return result
 
 
 ####################################################################################################
@@ -813,13 +835,11 @@ def MapAliases(keyValue, keyAliases):
 
 	result = keyValue
 	
-	#Log('type(keyAliases) = %s', type(keyAliases))
 	if isinstance(keyAliases, list): 
 		for aliasList in keyAliases:
-			#Log('Looking for %s in %s', keyValue, aliasList)
 			if (keyValue in aliasList):
-				#Log('Mapping %s => %s', keyValue, aliasList[0])
 				result = aliasList[0]
+				#Log("MapAliases: %s => %s" % (keyValue, result))
 
 	return result
 
@@ -857,12 +877,9 @@ def LoadAliases(aliasPrefName):
 	
 	#keyAliasString = Prefs[aliasPrefName]
 	#try:
-	#	#Log('keyAliasString = %s', keyAliasString)
 	#	keyAliases = json.loads(keyAliasString)
-	#	#Log('keyAliases = %s', keyAliases)
 	#except:
 	#	keyAliases = [] # no aliases, then
-
 	#return keyAliases
 
 
@@ -870,21 +887,32 @@ def LoadAliases(aliasPrefName):
 def ValidatePrefs():
 	global PVR_URL
 	if Prefs['server'] is None:
-		return MessageContainer("Error", L("ERROR_MISSING_SERVER_INFO"))
+		return MessageContainer("Error", L2("ERROR_MISSING_SERVER_INFO"))
 	elif Prefs['port'] is None:
-		return MessageContainer("Error", L("ERROR_MISSING_SERVER_PORT"))
+		return MessageContainer("Error", L2("ERROR_MISSING_SERVER_PORT"))
 	elif not Prefs['port'].isdigit():
-		return MessageContainer("Error", L("ERROR_SERVER_PORT_NON_NUMERIC"))
+		return MessageContainer("Error", L2("ERROR_SERVER_PORT_NON_NUMERIC"))
 	else:
 		port = Prefs['port']
 		PVR_URL = 'http://%s:%s/' % (Prefs['server'], port)
 		Log('ValidatePrefs: PVR URL = %s' % PVR_URL)
 		try:
-			testXML = GetMythTVRecordings({}, 1)
+			testXML = InternalGetRecordedList(1)
+			Log("ValidatePrefs succeeded")
+
 			# Should we test the 
 			#    <Version>0.25.20110928-1</Version>
 			# element for ver >= 0.27
+			version = testXML.find('Version').text
+			major, minor, rest = version.split('.', 2)
+			major = int(major)
+			minor = int(minor)
 		except:
-			return MessageContainer("Error", F("MYTHSERVER_UNAVAILABLE", "a", "b"))#(Prefs['server'], port))
+			Log("ValidatePrefs failed")
+			return MessageContainer("Error", F2("MYTHSERVER_UNAVAILABLE", Prefs['server'], port))
 
-		return MessageContainer("Success","Success")
+		if major >= 0 and minor >=27:
+			return MessageContainer("Success","Your MythTV server is version %s" % version)
+		else:
+			return MessageContainer("Warning","Your MythTV server is version %s - this plugin is developed for version 0.27 and later" % version)
+

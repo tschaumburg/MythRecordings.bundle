@@ -30,6 +30,12 @@
         "default": "false"
     },
     {
+        "id": "enableSeriesSupport",
+        "label": "Enable experimental series support",
+        "type": "bool",
+        "default": "false"
+    },
+    {
         "id": "respectMasterBackendOverride",
         "label": "Respect MythTVs Master Backend Override setting",
         "type": "bool",
