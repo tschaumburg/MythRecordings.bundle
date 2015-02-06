@@ -30,10 +30,10 @@
         "default": "false"
     },
     {
-        "id": "enableSeriesSupport",
-        "label": "Enable experimental series support",
+        "id": "detectSeriesByTitle",
+        "label": "Experimental: detect series by title",
         "type": "bool",
-        "default": "false"
+        "default": "true"
     },
     {
         "id": "respectMasterBackendOverride",

@@ -1,0 +1,9 @@
+[
+	["SERIES", "Series", "series", "serie"],
+	["CHILDREN", "Children", "kids"], 
+	["DOCUMENTARY", "documentary", "educational"], 
+	["ENTERTAINMENT", "Entertainment", "entertainment"], 
+	["MOVIES", "Movie", "movie", "film", "Film", "drama", "Drama"], 
+	["SPORT", "Sport", "sport", "Football", "football", "Fodbold", "fodbold"], 
+	["UNCATEGORIZED", "Uncategorized", "", "Ukategoriseret"]
+]
