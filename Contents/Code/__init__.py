@@ -287,7 +287,7 @@ def MainMenu():
 # from the MythTV server
 #
 ####################################################################################################
-@route('/video/mythrecordings/GroupRecordingsBy', filterBy = dict, startWith = int, groupByList = list, allow_sync=True) 
+@route('/video/mythrecordings/GroupRecordingsBy', filterBy = dict, startWith = int, groupByList = list) 
 def GroupRecordingsBy(groupByList = [], filterBy = {}, startWith = 0, seriesInetRef = None, staticBackground = None):
 	Log("GroupRecordingsBy(groupByList = %s, filterBy = %s, seriesInetRef = %s, staticBackground = %s)" % (groupByList, filterBy, seriesInetRef, staticBackground))
 	if groupByList is None:
@@ -488,7 +488,7 @@ def first_lower(s):
 # The resulting list of recordings is sorted by the element identified by the sortKeyName parameter
 # (another XPATH expression)
 ####################################################################################################
-@route('/video/mythrecordings/GetRecordingList', filterBy = dict, startWith = int, sortReverse = bool, allow_sync=True)
+@route('/video/mythrecordings/GetRecordingList', filterBy = dict, startWith = int, sortReverse = bool)
 def GetRecordingList(filterBy = {}, sortKeyName = None, sortReverse = True, startWith = 0, seriesInetRef = None, staticBackground = None):
 	Log("GetRecordingList(filterBy = %s, sortKeyName = %s, sortReverse = %s, startWith = %s, seriesInetRef = %s, staticBackground = %s)" % (filterBy, sortKeyName, sortReverse, startWith, seriesInetRef, staticBackground))
 
