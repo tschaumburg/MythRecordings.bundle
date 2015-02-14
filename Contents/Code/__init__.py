@@ -20,23 +20,30 @@ def F2(key, *args):
 ####################################################################################################
 NAME = "PLUGIN_TITLE"
 PVR_URL = 'http://%s:%s/' % (Prefs['server'],Prefs['port'])
-CACHE_TIME = int(Prefs['cacheTime'])
-DETECT_SERIES_BY_TITLE = True #bool(Prefs['detectSeriesByTitle'])
+CACHE_TIME = 120
+
+USE_DATA_CACHE = True
+DATA_CACHE_TIME = 120
+
+MAX_EPISODES_PER_PAGE = 20
+DETECT_SERIES_BY_TITLE = True
+
+UNMANGLE_TITLES = True
 
 MYTHTV_BACKGROUND = 'mythtv-background.png'
 MYTHTV_ICON = 'mythtv-icon.png'
 
 BY_NAME_ICON  = 'by-name-icon.png'
-BY_NAME_BACKGROUND  = 'by-name-background.png' # TODO: missing
+BY_NAME_BACKGROUND  = 'by-name-background.png'
 
 BY_DATE_ICON  = 'by-date-icon.png'
-BY_DATE_BACKGROUND  = 'by-date-background.png' # TODO: missing
+BY_DATE_BACKGROUND  = 'by-date-background.png'
 
 BY_CATEGORY_ICON  = 'by-category-icon.png'
 BY_CATEGORY_BACKGROUND  = 'by-category-background.png' # TODO: missing
 
-UNKNOWN_SERIES_BACKGROUND = 'unknown-series-background.png' # TODO: missing
-UNKNOWN_SERIES_ICON = 'unknown-series-icon.png' # TODO: missing
+UNKNOWN_SERIES_BACKGROUND = 'unknown-series-background.png'
+UNKNOWN_SERIES_ICON = 'unknown-series-icon.png'
 
 SCREENSHOT_ICON_HEIGHT = None
 SCREENSHOT_ICON_WIDTH = 128
@@ -157,12 +164,11 @@ CategoryAliases = json.loads(Resource.Load("CategoryAliases.json"))
 ####################################################################################################
 
 def Start():
-    	
 	ObjectContainer.title1 = L2(NAME)
-	Log('%s Started' % L2(NAME))
-	Log('Base URL set to %s' % PVR_URL)
 
+	Log('%s Started' % L2(NAME))
 	ValidatePrefs()
+	Log('Base URL set to %s' % PVR_URL)
 
 ####################################################################################################
 # MainMenu:
@@ -281,8 +287,8 @@ def MainMenu():
 # from the MythTV server
 #
 ####################################################################################################
-@route('/video/mythrecordings/GroupRecordingsBy', filterBy = dict, groupByList = list, allow_sync=True) 
-def GroupRecordingsBy(groupByList = [], filterBy = {}, seriesInetRef = None, staticBackground = None):
+@route('/video/mythrecordings/GroupRecordingsBy', filterBy = dict, startWith = int, groupByList = list, allow_sync=True) 
+def GroupRecordingsBy(groupByList = [], filterBy = {}, startWith = 0, seriesInetRef = None, staticBackground = None):
 	Log("GroupRecordingsBy(groupByList = %s, filterBy = %s, seriesInetRef = %s, staticBackground = %s)" % (groupByList, filterBy, seriesInetRef, staticBackground))
 	if groupByList is None:
 		groupByList = []
@@ -295,7 +301,9 @@ def GroupRecordingsBy(groupByList = [], filterBy = {}, seriesInetRef = None, sta
 		return GetRecordingList(filterBy=filterBy, sortKeyName='StartTime', seriesInetRef = seriesInetRef, staticBackground = staticBackground)
 	
 	# Get the key to group this level by:
-	groupByKey = groupByList.pop(0)
+	
+	subdirGroupByList = list(groupByList)
+	groupByKey = subdirGroupByList.pop(0)
 	#groupByKey = groupByList[0]
 	#del groupByList[0]
 
@@ -317,13 +325,19 @@ def GroupRecordingsBy(groupByList = [], filterBy = {}, seriesInetRef = None, sta
 	entries = {}
 	for recording in recordings:
 		keyValue = GetField(recording, groupByKey)
+		if keyValue is None:
+			keyValue = ""
+		keyValue = keyValue.strip(" \t!?")
 
 		if not entries.has_key(keyValue):
 			entries[keyValue] = []
 		entries[keyValue].append(recording)
 
 	# Loop through the keys and create a subdirectory entry for each:
-	for subdirName in entries.keys():
+	theresMore = False
+	subdirList = entries.keys()
+	subdirList.sort()
+	for subdirName in subdirList[startWith:]:
 		# make sure that only the matching recordings appear in the subdir:
                 subdirFilterBy = filterBy.copy()
                 subdirFilterBy[groupByKey] = subdirName
@@ -367,10 +381,10 @@ def GroupRecordingsBy(groupByList = [], filterBy = {}, seriesInetRef = None, sta
 			oc.add(
                             DirectoryObject(
                                 key=
-                                    Callback(
+				    Callback(
                                         GroupRecordingsBy,
                                         filterBy=subdirFilterBy,
-                                        groupByList=groupByList,
+                                        groupByList=subdirGroupByList,
                                         seriesInetRef=subSeriesInetRef,
 					staticBackground = subdirStaticBackground
                                     ), 
@@ -378,8 +392,31 @@ def GroupRecordingsBy(groupByList = [], filterBy = {}, seriesInetRef = None, sta
                                 thumb=subdirIconUrl
                             )
                         )
-		
+
+		# Break if the page-lenght is exceeded
+		if USE_PAGING and len(oc) >= MAX_EPISODES_PER_PAGE:
+			theresMore = True # remember to put in next-page entry when we're done
+			break
+
+	# OK, now we sort the list:
 	oc.objects.sort(key=lambda obj: obj.title)
+	
+	# ...and put in the next-page entry AFTER the sort:
+	if theresMore:
+		oc.add(
+			NextPageObject(
+				key = 
+					Callback(
+						GroupRecordingsBy,
+						groupByList = groupByList,
+						filterBy = filterBy,
+						startWith = int(startWith) + len(oc),
+						seriesInetRef = seriesInetRef,
+						staticBackground = staticBackground
+					),
+				title = "Next..."
+			)
+		)
 	return oc
 
 ####################################################################################################
@@ -451,9 +488,13 @@ def first_lower(s):
 # The resulting list of recordings is sorted by the element identified by the sortKeyName parameter
 # (another XPATH expression)
 ####################################################################################################
-@route('/video/mythrecordings/GetRecordingList', filterBy = dict, allow_sync=True)
-def GetRecordingList(filterBy = {}, sortKeyName = None, sortReverse = True, seriesInetRef = None, staticBackground = None):
-	Log("GetRecordingList(filterBy = %s, sortKeyName = %s, sortReverse = %s, seriesInetRef = %s, staticBackground = %s)" % (filterBy, sortKeyName, sortReverse, seriesInetRef, staticBackground))
+@route('/video/mythrecordings/GetRecordingList', filterBy = dict, startWith = int, sortReverse = bool, allow_sync=True)
+def GetRecordingList(filterBy = {}, sortKeyName = None, sortReverse = True, startWith = 0, seriesInetRef = None, staticBackground = None):
+	Log("GetRecordingList(filterBy = %s, sortKeyName = %s, sortReverse = %s, startWith = %s, seriesInetRef = %s, staticBackground = %s)" % (filterBy, sortKeyName, sortReverse, startWith, seriesInetRef, staticBackground))
+
+	if sortReverse is None:
+		sortReverse = True
+	sortReverse = bool(sortReverse)
 
 	backgroundUrl = GetSeriesBackground(seriesInetRef, staticBackground)
 	oc = ObjectContainer(
@@ -461,16 +502,32 @@ def GetRecordingList(filterBy = {}, sortKeyName = None, sortReverse = True, seri
 		art = backgroundUrl
 	)
 	
-	recordings = GetMythTVRecordings(filterBy)
+	recordings = list(GetMythTVRecordings(filterBy))
 
 	# Sorting the list:
 	if (sortKeyName is not None):
 		recordings.sort(key=lambda rec: rec.find(sortKeyName).text, reverse=sortReverse)
 	
-	for recording in recordings:
+	for recording in recordings[int(startWith):]:
 		recordingEntry = Recording(recording, seriesInetRef = seriesInetRef)
 		oc.add(recordingEntry)
-			
+		if USE_PAGING and len(oc) >= MAX_EPISODES_PER_PAGE:
+			oc.add(
+				NextPageObject(
+					key = 
+						Callback(
+							GetRecordingList,
+							filterBy = filterBy,
+							sortKeyName = sortKeyName,
+							sortReverse = sortReverse,
+							startWith = int(startWith) + len(oc),
+							seriesInetRef = seriesInetRef,
+							staticBackground = staticBackground
+						),
+					title = "Next..."
+				)
+			)
+			break
 	return oc
 
 def all_same(items):
@@ -610,7 +667,7 @@ def Recording(recording, seriesInetRef = None, staticBackground = None):
 	
 	# Title + subtitle:
 	# =================
-	maxlength = 120
+	maxlength = 60
 	if len(showname) + len(epname) + 3 < maxlength:
 		header = showname + " - " + epname
 		tagline = None
@@ -640,7 +697,7 @@ def Recording(recording, seriesInetRef = None, staticBackground = None):
 		backgroundUrl = R(MYTHTV_BACKGROUND)
 
 	return VideoClipObject(
-                title = header,
+                title = Sanitize(header),
 		tagline = tagline,
                 summary = warning + descr,
                 originally_available_at = shouldStart,
@@ -663,6 +720,11 @@ def Recording(recording, seriesInetRef = None, staticBackground = None):
 		]
         )
 
+def Sanitize(str):
+	if str is None:
+		return None
+	#str = str.replace("æ", "ae").replace("ø", "oe").replace("å", "aa").replace("Æ", "Ae").replace("Ø", "Oe").replace("Å", "Aa")
+	return str
 
 ####################################################################################################
 # RecordingInfo:
@@ -701,8 +763,8 @@ def RecordingInfo(chanId, startTime, seriesInetRef = None):
 #    list of recording (the structure of a recording is irrelevant - use GetField to
 #                       retrieve the value of a field)
 ####################################################################################################
-def GetMythTVRecordings(filterBy, maxCount=None):
-	root = InternalGetRecordedList(maxCount)
+def GetMythTVRecordings(filterBy):
+	root = InternalGetRecordedList()
 	
 	# Loop through recordings, filtering as specified:
 	recordings = root.findall('Programs/Program')
@@ -723,13 +785,36 @@ def GetMythTVRecordings(filterBy, maxCount=None):
 
 	return result
 
-def InternalGetRecordedList(maxCount=None):
+RECORDINGS_CACHE_KEY = "dk.schaumburg-it.plexapp.mythrecordings.AllRecordings"
+RECORDINGS_CACHE_TIMESTAMP_KEY = "dk.schaumburg-it.plexapp.mythrecordings.AllRecordings.Timestamp"
+
+def InternalGetRecordedList():
+	# Consult cache:
+	if USE_DATA_CACHE:
+		cachedRoot = Data.LoadObject(RECORDINGS_CACHE_KEY)
+		cachedRootTime = Data.LoadObject(RECORDINGS_CACHE_TIMESTAMP_KEY)
+		now = datetime.datetime.now()
+		if cachedRoot and cachedRootTime:
+			if (now - cachedRootTime).total_seconds() < DATA_CACHE_TIME:
+				#Log("CACHING: Using cached tree")
+				return cachedRoot
+			#Log("CACHING: Cached tree expired - loading from server")
+
+	root = InternalGetRecordedListUnCached()
+
+	if USE_DATA_CACHE:
+		#Log("CACHING: Saving cached tree")
+		Data.SaveObject(RECORDINGS_CACHE_KEY, root)
+		Data.SaveObject(RECORDINGS_CACHE_TIMESTAMP_KEY, datetime.datetime.now())
+
+	return root
+
+def InternalGetRecordedListUnCached(maxCount = None):
 	url = PVR_URL + 'Dvr/GetRecordedList'
 	if not maxCount is None:
 		url = url + "?Count=" + str(maxCount)
 	xmlstring = HTTP.Request(url, cacheTime = CACHE_TIME).content
 	root = ET.fromstring(xmlstring)
-	
 	return root
 
 def Match(filterBy, recording):
@@ -760,37 +845,41 @@ def identify_recording(recording):
 #
 ####################################################################################################
 def GetField(recording, fieldName):
-	if fieldName == "Title" or fieldName == "SubTitle":
-		subtitle = recording.find('SubTitle').text
-		if not subtitle is None:
-			subtitle = subtitle.decode()
+	if UNMANGLE_TITLES == True:
+		if fieldName == "Title" or fieldName == "SubTitle":
+			subtitle = recording.find('SubTitle').text
+			if not subtitle is None:
+				subtitle = subtitle.decode()
 
-		title = recording.find('Title').text
-		if not title is None:
-			title = title.decode()
+			title = recording.find('Title').text
+			if not title is None:
+				title = title.decode()
+				#Log("TITLE = '%s'" % title)
 		
-		dontSplit = False
-		for nosplitter in TITLE_NOSPLITTERS:
-			dontSplit = re.search(nosplitter, title)
-			if dontSplit:
-				break
-
-		if not dontSplit:
-			for splitter in TITLE_SPLITTERS:
-				splitResult = title.split(splitter, 1)
-				if len(splitResult) == 2:
-					orgTitle = title
-					title,newsubtitle = splitResult
-					title = title.strip()
-					newsubtitle = newsubtitle.strip()
-					if subtitle:
-						subtitle = newsubtitle# + " - " + subtitle
+			dontSplit = False
+			for nosplitter in TITLE_NOSPLITTERS:
+				dontSplit = re.search(nosplitter, title)
+				if dontSplit:
 					break
 
-		if fieldName == "Title":
-			return title
-		if fieldName == 'SubTitle':
-			return subtitle
+			if not dontSplit:
+				for splitter in TITLE_SPLITTERS:
+					splitResult = title.split(splitter, 1)
+					if len(splitResult) == 2:
+						orgTitle = title
+						title,newsubtitle = splitResult
+						title = title.strip()
+						newsubtitle = newsubtitle.strip()
+						if subtitle:
+							subtitle = newsubtitle# + " - " + subtitle
+						else:
+							subtitle = newsubtitle
+						break
+						
+			if fieldName == "Title":
+				return title
+			if fieldName == 'SubTitle':
+				return subtitle
 
 	if fieldName == "Category":
 		keyAliases = LoadAliases('categoryAliases')
@@ -871,35 +960,107 @@ def LoadAliases(aliasPrefName):
 	return []
 
 #####################################################################################################
-def ValidatePrefs():
-	global PVR_URL
-	if Prefs['server'] is None:
-		return MessageContainer("Error", L2("ERROR_MISSING_SERVER_INFO"))
-	elif Prefs['port'] is None:
-		return MessageContainer("Error", L2("ERROR_MISSING_SERVER_PORT"))
-	elif not Prefs['port'].isdigit():
-		return MessageContainer("Error", L2("ERROR_SERVER_PORT_NON_NUMERIC"))
+def StringPref(key, errors):
+	if Prefs[key] is None:
+		errors.append("Preference %s is not defined" % key)
 	else:
-		port = Prefs['port']
-		PVR_URL = 'http://%s:%s/' % (Prefs['server'], port)
-		Log('ValidatePrefs: PVR URL = %s' % PVR_URL)
+		return Prefs[key]
+
+def IntPref(key, errors):
+	if Prefs[key] is None:
+		errors.append("Preference %s is not defined" % key)
+	elif not Prefs[key].isdigit():
+		errors.append(L2("Preference %s: '%s' is not an integer" % (key, Prefs[key])))
+	else:
+		return int(Prefs[key])
+
+def BoolPref(key, errors):
+	if Prefs[key] is None:
+		errors.append("Preference %s is not defined" % key)
+	else:
 		try:
-			testXML = InternalGetRecordedList(1)
-			Log("ValidatePrefs succeeded")
-
-			# Should we test the 
-			#    <Version>0.25.20110928-1</Version>
-			# element for ver >= 0.27
-			version = testXML.find('Version').text
-			major, minor, rest = version.split('.', 2)
-			major = int(major)
-			minor = int(minor)
+			return bool(Prefs[key])
 		except:
-			Log("ValidatePrefs failed")
-			return MessageContainer("Error", F2("MYTHSERVER_UNAVAILABLE", Prefs['server'], port))
+			errors.append("Preference %s value '%s' is not a bool" % (key, Prefs[key]))
 
-		if major >= 0 and minor >=27:
-			return MessageContainer("Success","Your MythTV server is version %s" % version)
-		else:
-			return MessageContainer("Warning","Your MythTV server is version %s - this plugin is developed for version 0.27 and later" % version)
+def ValidatePrefs():
+	errors = []
+	version = "unknown"
+
+	# Check the PVR_URL:
+	global PVR_URL
+	server = StringPref('server', errors)
+	port = IntPref('port', errors)
+	PVR_URL = 'http://%s:%s/' % (server, port)
+
+	#Log('ValidatePrefs: PVR URL = %s' % PVR_URL)
+	try:
+		testXML = InternalGetRecordedListUnCached(1)
+		#Log("InternalGetRecordedListUnCached succeeded")
+
+		# Should we test the 
+		#    <Version>0.25.20110928-1</Version>
+		# element for ver >= 0.27
+		version = testXML.find('Version').text
+		major, minor, rest = version.split('.', 2)
+		major = int(major)
+		minor = int(minor)
+	except:
+		#Log("ValidatePrefs failed")
+		errors.append(F2("MYTHSERVER_UNAVAILABLE", Prefs['server'], port))
+
+	if major == 0 and minor < 27:
+		errors.append("Your MythTV server is version %s - this plugin is developed for version 0.27 and later" % version)
+
+	# Check CACHE_TIME 
+	global CACHE_TIME
+	CACHE_TIME = IntPref('cacheTime', errors)
+	if CACHE_TIME and CACHE_TIME < 0:
+		errors.append("cacheTime is %s - must be non-negative" % CACHE_TIME)
+
+	# Check USE_PAGING
+	global USE_PAGING
+	USE_PAGING = BoolPref('usePaging', errors)
+
+	# Check MAX_EPISODES_PER_PAGE
+	global MAX_EPISODES_PER_PAGE
+    	MAX_EPISODES_PER_PAGE = IntPref('episodesPerPage', errors)
+	if MAX_EPISODES_PER_PAGE and MAX_EPISODES_PER_PAGE <= 0:
+		errors.append("episodesPerPage is %s - must be positive" % MAX_EPISODES_PER_PAGE)
+
+	# Check USE_DATA_CACHE
+	global USE_DATA_CACHE
+	USE_DATA_CACHE = BoolPref('useDataCache', errors)
+
+	# Check DATA_CACHE_TIME
+	global DATA_CACHE_TIME
+	DATA_CACHE_TIME = IntPref('cacheTime', errors)
+	if DATA_CACHE_TIME and DATA_CACHE_TIME < 0:
+		errors.append("cacheTime is %s - must be non-negative" % DATA_CACHE_TIME)
+
+	# Check DETECT_SERIES_BY_TITLE
+	global DETECT_SERIES_BY_TITLE
+	DETECT_SERIES_BY_TITLE = BoolPref('detectSeriesByTitle', errors)
+
+	# Check UNMANGLE_TITLES
+	global UNMANGLE_TITLES
+	UNMANGLE_TITLES = BoolPref('unmangleTitles', errors)
+
+
+	#Log("PVR_URL = %s" % PVR_URL)
+	#Log("CACHE_TIME = %s" % CACHE_TIME)
+	#Log("USE_PAGING = %s" % USE_PAGING)
+	#Log("MAX_EPISODES_PER_PAGE = %s" % MAX_EPISODES_PER_PAGE)
+	#Log("USE_DATA_CACHE = %s" % USE_DATA_CACHE)
+	#Log("DATA_CACHE_TIME = %s" % DATA_CACHE_TIME)
+	#Log("DETECT_SERIES_BY_TITLE = %s" % DETECT_SERIES_BY_TITLE)
+	#Log("UNMANGLE_TITLES = %s" % UNMANGLE_TITLES)
+
+	if len(errors) > 0:
+		errs = "\n   ".join(errors)
+		errstring = "Preferences error:\n   %s" % errs
+		Log("Preferences error:\n   %s" % errs)
+		return MessageContainer("Error", errs)
+	#else:
+	#	return MessageContainer("Success","Your MythTV server is version %s" % version)
 
