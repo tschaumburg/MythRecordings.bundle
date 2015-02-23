@@ -3,7 +3,7 @@
         "id": "server",
         "type": "text",
         "label": "Server Name",
-        "default": "192.168.2.10" 
+        "default": "127.0.0.1" 
     },
     {
         "id": "port",
